@@ -6,6 +6,9 @@ Serves both Python and Java test automation users.
 
 import asyncio
 import logging
+import tempfile
+import os
+from pathlib import Path
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
@@ -15,8 +18,9 @@ from tools.element_tools import ElementTools
 from tools.assertion_tools import AssertionTools
 from tools.codegen_tools import CodegenTools
 
+_log_path = Path(tempfile.gettempdir()) / "selenium-mcp.log"
 logging.basicConfig(
-    filename="/tmp/selenium-mcp.log",
+    filename=str(_log_path),
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
