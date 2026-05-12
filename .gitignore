@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+wheels/
+sdist/
+develop-eggs/
+.eggs/
+lib/
+lib64/
+parts/
+var/
+.installed.cfg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Selenium / WebDriver
+/tmp/selenium-mcp.log
+selenium-debug.log
+geckodriver.log
+chromedriver.log
+*.png                  # screenshots
+
+# Selenium Manager cache
+.selenium/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pytest
+.pytest_cache/
+.cache/
+htmlreport/
+reports/
+*.xml
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Env / secrets
+.env
+.env.*
+*.env

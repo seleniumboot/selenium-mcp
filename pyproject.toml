@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "selenium-mcp-panjatan"
+version = "0.1.0"
+description = "A Python MCP server for Selenium WebDriver — with Java TestNG/JUnit5 codegen"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Panjatan", email = "your@email.com" }]
+keywords = ["selenium", "mcp", "test-automation", "webdriver", "testng", "junit"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "selenium>=4.6.0",
+]
+
+[project.scripts]
+selenium-mcp = "server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
