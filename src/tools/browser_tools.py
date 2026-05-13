@@ -149,9 +149,20 @@ class BrowserTools:
         }
 
     async def _start_browser(self, args: dict) -> str:
+        if self.driver:
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
+            self.driver = None
+
         browser = args.get("browser", "chrome")
         headless = args.get("headless", False)
-        w, h = args.get("window_size", "1920x1080").lower().split("x")
+        try:
+            w, h = args.get("window_size", "1920x1080").lower().replace(" ", "").split("x")
+            int(w), int(h)
+        except (ValueError, AttributeError):
+            w, h = "1920", "1080"
 
         if browser == "chrome":
             opts = ChromeOptions()

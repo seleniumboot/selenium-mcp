@@ -294,25 +294,30 @@ class ElementTools:
             return f"✅ Selected by text: '{args['by_text']}'"
         elif "by_value" in args:
             sel.select_by_value(args["by_value"])
+            self.browser.record("select_option", selector=args["selector"], by_value=args["by_value"])
             return f"✅ Selected by value: '{args['by_value']}'"
         elif "by_index" in args:
             sel.select_by_index(args["by_index"])
+            self.browser.record("select_option", selector=args["selector"], by_index=args["by_index"])
             return f"✅ Selected by index: {args['by_index']}"
         return "❌ Provide by_text, by_value, or by_index"
 
     async def _hover(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).move_to_element(el).perform()
+        self.browser.record("hover", selector=args["selector"], by=args.get("by", "css"))
         return f"✅ Hovered over '{args['selector']}'"
 
     async def _double_click(self, args: dict) -> str:
         el = self._find_clickable(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).double_click(el).perform()
+        self.browser.record("double_click", selector=args["selector"], by=args.get("by", "css"))
         return f"✅ Double-clicked '{args['selector']}'"
 
     async def _right_click(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).context_click(el).perform()
+        self.browser.record("right_click", selector=args["selector"], by=args.get("by", "css"))
         return f"✅ Right-clicked '{args['selector']}'"
 
     async def _drag_and_drop(self, args: dict) -> str:
@@ -350,6 +355,7 @@ class ElementTools:
     async def _scroll_to_element(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         self.browser.get_driver().execute_script("arguments[0].scrollIntoView(true);", el)
+        self.browser.record("scroll_to_element", selector=args["selector"], by=args.get("by", "css"))
         return f"✅ Scrolled to '{args['selector']}'"
 
     async def _clear_field(self, args: dict) -> str:

@@ -16,7 +16,7 @@ class CodegenTools:
                 name="generate_python_test",
                 description=(
                     "Generate a pytest + Selenium test script from the current browser session. "
-                    "Captures all recorded actions (navigate, click, type, etc.) into a runnable test."
+                    "Captures all recorded actions (navigate, click, type, hover, drag, select, etc.) into a runnable test."
                 ),
                 inputSchema={
                     "type": "object",
@@ -31,10 +31,6 @@ class CodegenTools:
                             "default": "TestRecordedFlow",
                             "description": "Name of the test class"
                         },
-                        "include_assertions": {
-                            "type": "boolean",
-                            "default": True
-                        }
                     },
                 },
             ),
@@ -126,7 +122,8 @@ class CodegenTools:
         code = f'''import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
@@ -154,23 +151,42 @@ class {class_name}:
         indent = "        "
         for entry in log:
             action = entry.get("action")
+            by = entry.get("by", "css")
+            sel = entry.get("selector", "")
+            by_const = self._py_by(by)
+
             if action == "start_browser":
                 lines.append(f"{indent}# Browser started — handled in setup_method")
             elif action == "navigate":
                 lines.append(f'{indent}self.driver.get("{entry["url"]}")')
             elif action == "click":
-                by = entry.get("by", "css")
-                sel = entry.get("selector", "")
-                by_const = self._py_by(by)
                 lines.append(f'{indent}self.wait.until(EC.element_to_be_clickable(({by_const}, "{sel}"))).click()')
             elif action == "type_text":
-                by = entry.get("by", "css")
-                sel = entry.get("selector", "")
                 text = entry.get("text", "")
-                by_const = self._py_by(by)
                 lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
                 lines.append(f'{indent}el.clear()')
                 lines.append(f'{indent}el.send_keys("{text}")')
+            elif action == "hover":
+                lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
+                lines.append(f'{indent}ActionChains(self.driver).move_to_element(el).perform()')
+            elif action == "double_click":
+                lines.append(f'{indent}el = self.wait.until(EC.element_to_be_clickable(({by_const}, "{sel}")))')
+                lines.append(f'{indent}ActionChains(self.driver).double_click(el).perform()')
+            elif action == "right_click":
+                lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
+                lines.append(f'{indent}ActionChains(self.driver).context_click(el).perform()')
+            elif action == "scroll_to_element":
+                lines.append(f'{indent}el = self.wait.until(EC.presence_of_element_located(({by_const}, "{sel}")))')
+                lines.append(f'{indent}self.driver.execute_script("arguments[0].scrollIntoView(true);", el)')
+            elif action == "select_option":
+                lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
+                lines.append(f'{indent}sel_obj = Select(el)')
+                if "by_text" in entry:
+                    lines.append(f'{indent}sel_obj.select_by_visible_text("{entry["by_text"]}")')
+                elif "by_value" in entry:
+                    lines.append(f'{indent}sel_obj.select_by_value("{entry["by_value"]}")')
+                elif "by_index" in entry:
+                    lines.append(f'{indent}sel_obj.select_by_index({entry["by_index"]})')
             elif action == "go_back":
                 lines.append(f"{indent}self.driver.back()")
             elif action == "go_forward":
@@ -188,13 +204,14 @@ class {class_name}:
 
     def _py_by(self, by: str) -> str:
         return {
-            "css": "By.CSS_SELECTOR",
-            "xpath": "By.XPATH",
-            "id": "By.ID",
-            "name": "By.NAME",
-            "tag": "By.TAG_NAME",
-            "class": "By.CLASS_NAME",
-            "link": "By.LINK_TEXT",
+            "css":          "By.CSS_SELECTOR",
+            "xpath":        "By.XPATH",
+            "id":           "By.ID",
+            "name":         "By.NAME",
+            "tag":          "By.TAG_NAME",
+            "class":        "By.CLASS_NAME",
+            "link":         "By.LINK_TEXT",
+            "partial_link": "By.PARTIAL_LINK_TEXT",
         }.get(by, "By.CSS_SELECTOR")
 
     # ------------------------------------------------------------------ #
@@ -209,11 +226,14 @@ class {class_name}:
         code = f'''package {package};
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -263,11 +283,14 @@ public class {test_name} {{
 
 import org.junit.jupiter.api.*;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import java.time.Duration;
 
@@ -308,23 +331,37 @@ public class {test_name} {{
         indent = "        "
         for entry in log:
             action = entry.get("action")
+            by = entry.get("by", "css")
+            sel = entry.get("selector", "")
+            by_java = self._java_by(by, sel)
+
             if action == "start_browser":
                 lines.append(f"{indent}// Browser started — handled in setUp()")
             elif action == "navigate":
                 lines.append(f'{indent}driver.get("{entry["url"]}");')
             elif action == "click":
-                by = entry.get("by", "css")
-                sel = entry.get("selector", "")
-                by_java = self._java_by(by, sel)
                 lines.append(f'{indent}wait.until(ExpectedConditions.elementToBeClickable({by_java})).click();')
             elif action == "type_text":
-                by = entry.get("by", "css")
-                sel = entry.get("selector", "")
                 text = entry.get("text", "")
-                by_java = self._java_by(by, sel)
                 lines.append(f'{indent}WebElement field = wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}));')
                 lines.append(f'{indent}field.clear();')
                 lines.append(f'{indent}field.sendKeys("{text}");')
+            elif action == "hover":
+                lines.append(f'{indent}new Actions(driver).moveToElement(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}))).perform();')
+            elif action == "double_click":
+                lines.append(f'{indent}new Actions(driver).doubleClick(wait.until(ExpectedConditions.elementToBeClickable({by_java}))).perform();')
+            elif action == "right_click":
+                lines.append(f'{indent}new Actions(driver).contextClick(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}))).perform();')
+            elif action == "scroll_to_element":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", wait.until(ExpectedConditions.presenceOfElementLocated({by_java})));')
+            elif action == "select_option":
+                lines.append(f'{indent}Select dropdown = new Select(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java})));')
+                if "by_text" in entry:
+                    lines.append(f'{indent}dropdown.selectByVisibleText("{entry["by_text"]}");')
+                elif "by_value" in entry:
+                    lines.append(f'{indent}dropdown.selectByValue("{entry["by_value"]}");')
+                elif "by_index" in entry:
+                    lines.append(f'{indent}dropdown.selectByIndex({entry["by_index"]});')
             elif action == "go_back":
                 lines.append(f"{indent}driver.navigate().back();")
             elif action == "go_forward":
@@ -333,7 +370,7 @@ public class {test_name} {{
                 lines.append(f"{indent}driver.navigate().refresh();")
             elif action == "execute_script":
                 script = entry.get("script", "").replace('"', '\\"')
-                lines.append(f'{indent}((org.openqa.selenium.JavascriptExecutor) driver).executeScript("{script}");')
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("{script}");')
             else:
                 lines.append(f"{indent}// TODO: {entry}")
         if not lines:
@@ -343,12 +380,12 @@ public class {test_name} {{
     def _java_by(self, by: str, selector: str) -> str:
         sel = selector.replace('"', '\\"')
         return {
-            "css":   f'By.cssSelector("{sel}")',
-            "xpath": f'By.xpath("{sel}")',
-            "id":    f'By.id("{sel}")',
-            "name":  f'By.name("{sel}")',
-            "tag":   f'By.tagName("{sel}")',
-            "class": f'By.className("{sel}")',
-            "link":  f'By.linkText("{sel}")',
+            "css":          f'By.cssSelector("{sel}")',
+            "xpath":        f'By.xpath("{sel}")',
+            "id":           f'By.id("{sel}")',
+            "name":         f'By.name("{sel}")',
+            "tag":          f'By.tagName("{sel}")',
+            "class":        f'By.className("{sel}")',
+            "link":         f'By.linkText("{sel}")',
+            "partial_link": f'By.partialLinkText("{sel}")',
         }.get(by, f'By.cssSelector("{sel}")')
-        

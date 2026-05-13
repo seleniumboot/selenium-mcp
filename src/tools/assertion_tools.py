@@ -8,6 +8,17 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from mcp.types import Tool
 
+BY_MAP = {
+    "css":          By.CSS_SELECTOR,
+    "xpath":        By.XPATH,
+    "id":           By.ID,
+    "name":         By.NAME,
+    "tag":          By.TAG_NAME,
+    "class":        By.CLASS_NAME,
+    "link":         By.LINK_TEXT,
+    "partial_link": By.PARTIAL_LINK_TEXT,
+}
+
 
 class AssertionTools:
     def __init__(self, browser_tools):
@@ -15,6 +26,9 @@ class AssertionTools:
 
     def _driver(self):
         return self.browser.get_driver()
+
+    def _by(self, strategy: str):
+        return BY_MAP.get(strategy, By.CSS_SELECTOR)
 
     def get_tools(self) -> list[Tool]:
         return [
@@ -51,7 +65,8 @@ class AssertionTools:
                         "selector": {"type": "string"},
                         "by": {"type": "string", "default": "css"},
                         "expected": {"type": "string"},
-                        "exact": {"type": "boolean", "default": False}
+                        "exact": {"type": "boolean", "default": False},
+                        "timeout": {"type": "integer", "default": 10}
                     },
                     "required": ["selector", "expected"],
                 },
@@ -77,7 +92,7 @@ class AssertionTools:
                     "properties": {
                         "selector": {"type": "string"},
                         "by": {"type": "string", "default": "css"},
-                        "timeout": {"type": "integer", "default": 10}
+                        "timeout": {"type": "integer", "default": 3}
                     },
                     "required": ["selector"],
                 },
@@ -92,7 +107,8 @@ class AssertionTools:
                         "by": {"type": "string", "default": "css"},
                         "attribute": {"type": "string"},
                         "expected": {"type": "string"},
-                        "exact": {"type": "boolean", "default": True}
+                        "exact": {"type": "boolean", "default": True},
+                        "timeout": {"type": "integer", "default": 10}
                     },
                     "required": ["selector", "attribute", "expected"],
                 },
@@ -130,29 +146,29 @@ class AssertionTools:
 
     def get_handlers(self) -> dict:
         return {
-            "assert_title":             self._assert_title,
-            "assert_url":               self._assert_url,
-            "assert_text":              self._assert_text,
-            "assert_element_visible":   self._assert_element_visible,
+            "assert_title":               self._assert_title,
+            "assert_url":                 self._assert_url,
+            "assert_text":                self._assert_text,
+            "assert_element_visible":     self._assert_element_visible,
             "assert_element_not_visible": self._assert_element_not_visible,
-            "assert_attribute":         self._assert_attribute,
-            "assert_page_contains":     self._assert_page_contains,
-            "assert_element_count":     self._assert_element_count,
+            "assert_attribute":           self._assert_attribute,
+            "assert_page_contains":       self._assert_page_contains,
+            "assert_element_count":       self._assert_element_count,
         }
 
     # ------------------------------------------------------------------ #
-    #  Assertion helpers                                                   #
+    #  Helpers                                                             #
     # ------------------------------------------------------------------ #
     def _pass(self, msg): return f"✅ PASS | {msg}"
     def _fail(self, msg): return f"❌ FAIL | {msg}"
 
+    # ------------------------------------------------------------------ #
+    #  Handlers                                                            #
+    # ------------------------------------------------------------------ #
     async def _assert_title(self, args: dict) -> str:
         actual = self._driver().title
         exp = args["expected"]
-        if args.get("exact", False):
-            ok = actual == exp
-        else:
-            ok = exp.lower() in actual.lower()
+        ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
         return self._pass(f"title='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_url(self, args: dict) -> str:
@@ -162,18 +178,24 @@ class AssertionTools:
         return self._pass(f"url='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_text(self, args: dict) -> str:
-        by_map = {"css": By.CSS_SELECTOR, "xpath": By.XPATH, "id": By.ID, "name": By.NAME}
-        el = self._driver().find_element(by_map.get(args.get("by", "css"), By.CSS_SELECTOR), args["selector"])
+        by = self._by(args.get("by", "css"))
+        timeout = args.get("timeout", 10)
+        try:
+            el = WebDriverWait(self._driver(), timeout).until(
+                EC.visibility_of_element_located((by, args["selector"]))
+            )
+        except Exception:
+            return self._fail(f"element '{args['selector']}' not found within {timeout}s")
         actual = el.text
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
         return self._pass(f"text='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_element_visible(self, args: dict) -> str:
-        by_map = {"css": By.CSS_SELECTOR, "xpath": By.XPATH, "id": By.ID}
-        by = by_map.get(args.get("by", "css"), By.CSS_SELECTOR)
+        by = self._by(args.get("by", "css"))
+        timeout = args.get("timeout", 10)
         try:
-            WebDriverWait(self._driver(), args.get("timeout", 10)).until(
+            WebDriverWait(self._driver(), timeout).until(
                 EC.visibility_of_element_located((by, args["selector"]))
             )
             return self._pass(f"'{args['selector']}' is visible")
@@ -181,10 +203,10 @@ class AssertionTools:
             return self._fail(f"'{args['selector']}' is NOT visible")
 
     async def _assert_element_not_visible(self, args: dict) -> str:
-        by_map = {"css": By.CSS_SELECTOR, "xpath": By.XPATH, "id": By.ID}
-        by = by_map.get(args.get("by", "css"), By.CSS_SELECTOR)
+        by = self._by(args.get("by", "css"))
+        timeout = args.get("timeout", 3)
         try:
-            WebDriverWait(self._driver(), args.get("timeout", 10)).until(
+            WebDriverWait(self._driver(), timeout).until(
                 EC.invisibility_of_element_located((by, args["selector"]))
             )
             return self._pass(f"'{args['selector']}' is not visible")
@@ -192,9 +214,14 @@ class AssertionTools:
             return self._fail(f"'{args['selector']}' IS visible (expected hidden)")
 
     async def _assert_attribute(self, args: dict) -> str:
-        by_map = {"css": By.CSS_SELECTOR, "xpath": By.XPATH, "id": By.ID}
-        by = by_map.get(args.get("by", "css"), By.CSS_SELECTOR)
-        el = self._driver().find_element(by, args["selector"])
+        by = self._by(args.get("by", "css"))
+        timeout = args.get("timeout", 10)
+        try:
+            el = WebDriverWait(self._driver(), timeout).until(
+                EC.presence_of_element_located((by, args["selector"]))
+            )
+        except Exception:
+            return self._fail(f"element '{args['selector']}' not found within {timeout}s")
         actual = el.get_attribute(args["attribute"])
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", True) else (exp in (actual or ""))
@@ -210,11 +237,9 @@ class AssertionTools:
         return self._pass(f"page contains '{text}'") if ok else self._fail(f"'{text}' not found on page")
 
     async def _assert_element_count(self, args: dict) -> str:
-        by_map = {"css": By.CSS_SELECTOR, "xpath": By.XPATH, "id": By.ID}
-        by = by_map.get(args.get("by", "css"), By.CSS_SELECTOR)
+        by = self._by(args.get("by", "css"))
         els = self._driver().find_elements(by, args["selector"])
         actual = len(els)
         exp = args["expected_count"]
         ok = actual == exp
         return self._pass(f"count={actual}") if ok else self._fail(f"expected={exp} | actual={actual}")
-    

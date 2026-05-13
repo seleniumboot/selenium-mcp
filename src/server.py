@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import Tool, TextContent, ImageContent
 
 from tools.browser_tools import BrowserTools
 from tools.element_tools import ElementTools
@@ -62,6 +62,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
     try:
         result = await handler(arguments)
+        if isinstance(result, str) and result.startswith("screenshot:base64:"):
+            b64 = result[len("screenshot:base64:"):]
+            return [ImageContent(type="image", data=b64, mimeType="image/png")]
         return [TextContent(type="text", text=result)]
     except Exception as e:
         log.error(f"Tool error [{name}]: {e}")
