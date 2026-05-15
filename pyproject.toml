@@ -1,31 +1,37 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "selenium-mcp-panjatan"
-version = "0.1.0"
-description = "A Python MCP server for Selenium WebDriver — with Java TestNG/JUnit5 codegen"
+name = "seleniumboot-mcp"
+version = "0.2.1"
+description = "A Python MCP server for Selenium WebDriver — browser automation, Java TestNG/JUnit5/Cucumber codegen, and Page Object Model generation"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Panjatan", email = "your@email.com" }]
-keywords = ["selenium", "mcp", "test-automation", "webdriver", "testng", "junit"]
+authors = [{ name = "Panjatan", email = "panjatan.tech@gmail.com" }]
+keywords = ["selenium", "mcp", "test-automation", "webdriver", "testng", "junit", "model-context-protocol"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Testing",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "mcp>=1.0.0",
     "selenium>=4.6.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/seleniumboot/selenium-mcp"
+Repository = "https://github.com/seleniumboot/selenium-mcp"
+Issues = "https://github.com/seleniumboot/selenium-mcp/issues"
+
 [project.scripts]
-selenium-mcp = "server:main"
+seleniumboot-mcp = "selenium_mcp.server:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
