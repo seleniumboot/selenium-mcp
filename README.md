@@ -3,7 +3,7 @@
 A Python **Model Context Protocol (MCP)** server for Selenium WebDriver automation.
 Let Claude or GitHub Copilot control a real browser — navigate pages, interact with elements,
 run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / pytest** test code from recorded sessions.
-76 tools. No ChromeDriver setup. Browser auto-starts on first use.
+82 tools. No ChromeDriver setup. Browser auto-starts on first use.
 
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
@@ -85,7 +85,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (76 total)
+## Tools (82 total)
 
 ### Browser
 | Tool | Description |
@@ -114,6 +114,12 @@ Claude controls the real browser, records every action, and on request generates
 | `get_local_storage` / `set_local_storage` | Read or write localStorage |
 | `get_session_storage` / `set_session_storage` | Read or write sessionStorage |
 | `wait_for_network_idle` | Wait until XHR/fetch traffic is quiet — essential for SPAs |
+| `inspect_page` | Discover all inputs, buttons, selects, links with best-fit CSS selectors |
+| `get_network_logs` | Captured XHR/fetch requests — method, URL, status, timing |
+| `mock_response` | Stub fetch/XHR by URL pattern with a canned response |
+| `clear_mock_responses` | Remove all active mock rules |
+| `compare_screenshot` | Pixel diff against a saved baseline — visual regression |
+| `check_accessibility` | Built-in WCAG audit — alt text, labels, headings, keyboard access |
 
 ### Elements
 | Tool | Description |

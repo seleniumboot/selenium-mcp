@@ -5,7 +5,9 @@ cookies, localStorage/sessionStorage, console logs, mobile emulation, page scrol
 
 import asyncio
 import base64
+import io
 import json
+import os
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
@@ -39,7 +41,7 @@ class BrowserTools:
             opts = ChromeOptions()
             opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage")
-            opts.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+            opts.set_capability("goog:loggingPrefs", {"browser": "ALL", "performance": "ALL"})
             self.driver = webdriver.Chrome(options=opts)
             self.record("start_browser", browser="chrome", headless=False)
         return self.driver
@@ -284,6 +286,87 @@ class BrowserTools:
                     "required": ["key", "value"],
                 },
             ),
+            # ── Page inspection ──────────────────────────────────────── #
+            Tool(
+                name="inspect_page",
+                description=(
+                    "Discover all interactive elements on the current page — inputs, buttons, "
+                    "selects, checkboxes, textareas, and links — with their best CSS selectors and labels. "
+                    "Use this before writing locators so the AI knows exactly what's on the page."
+                ),
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            # ── Network interception ─────────────────────────────────── #
+            Tool(
+                name="get_network_logs",
+                description="Return captured XHR/fetch network requests (method, URL, status, timing). Chrome only.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "url_filter": {"type": "string", "description": "Only show requests whose URL contains this string"},
+                        "method":     {"type": "string", "description": "Filter by HTTP method e.g. GET, POST"},
+                        "limit":      {"type": "integer", "default": 50, "description": "Max requests to return"},
+                    },
+                },
+            ),
+            Tool(
+                name="mock_response",
+                description=(
+                    "Intercept fetch/XHR requests matching a URL pattern and return a canned response. "
+                    "Useful for testing without a real backend. Injection survives until the page is reloaded."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "url_pattern":   {"type": "string", "description": "Substring or regex pattern to match the request URL"},
+                        "status":        {"type": "integer", "default": 200},
+                        "body":          {"type": "string", "default": "{}", "description": "Response body string"},
+                        "content_type":  {"type": "string", "default": "application/json"},
+                    },
+                    "required": ["url_pattern"],
+                },
+            ),
+            Tool(
+                name="clear_mock_responses",
+                description="Remove all active mock response rules injected by mock_response.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            # ── Visual regression ─────────────────────────────────────── #
+            Tool(
+                name="compare_screenshot",
+                description=(
+                    "Compare the current page screenshot against a saved baseline. "
+                    "On first run (or with update_baseline=true) saves the baseline. "
+                    "Returns the pixel diff percentage. Install Pillow for accurate pixel comparison."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name":            {"type": "string", "default": "default", "description": "Baseline name e.g. 'homepage'"},
+                        "update_baseline": {"type": "boolean", "default": False},
+                        "threshold":       {"type": "number", "default": 0.1, "description": "Max allowed diff % before failure"},
+                    },
+                },
+            ),
+            # ── Accessibility ─────────────────────────────────────────── #
+            Tool(
+                name="check_accessibility",
+                description=(
+                    "Run a built-in accessibility audit on the current page. "
+                    "Checks for missing alt text, unlabelled inputs, empty buttons/links, "
+                    "missing page title, HTML lang, heading structure, and keyboard accessibility."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "level": {
+                            "type": "string",
+                            "enum": ["all", "critical", "serious", "moderate", "minor"],
+                            "default": "all",
+                        }
+                    },
+                },
+            ),
             # ── Network idle ─────────────────────────────────────────── #
             Tool(
                 name="wait_for_network_idle",
@@ -349,6 +432,12 @@ class BrowserTools:
             "get_session_storage":    self._get_session_storage,
             "set_session_storage":    self._set_session_storage,
             "wait_for_network_idle":  self._wait_for_network_idle,
+            "inspect_page":           self._inspect_page,
+            "get_network_logs":       self._get_network_logs,
+            "mock_response":          self._mock_response,
+            "clear_mock_responses":   self._clear_mock_responses,
+            "compare_screenshot":     self._compare_screenshot,
+            "check_accessibility":    self._check_accessibility,
         }
 
     # ── Browser lifecycle ────────────────────────────────────────────── #
@@ -376,7 +465,7 @@ class BrowserTools:
             opts.add_argument(f"--window-size={w},{h}")
             opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage")
-            opts.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+            opts.set_capability("goog:loggingPrefs", {"browser": "ALL", "performance": "ALL"})
             self.driver = webdriver.Chrome(options=opts)
         elif browser == "firefox":
             opts = FirefoxOptions()
@@ -654,3 +743,320 @@ class BrowserTools:
             f"⚠️ Timed out after {timeout}s — "
             f"active={state.get('active', '?')}, readyState={state.get('readyState', '?')}"
         )
+
+    # ── Page inspection ──────────────────────────────────────────────── #
+
+    _INSPECT_SCRIPT = """
+    function bestSel(el) {
+        if (el.id) return '#' + CSS.escape(el.id);
+        if (el.name) return '[name="' + el.name + '"]';
+        const cls = (el.className || '').trim().split(/\\s+/)[0];
+        if (cls) return el.tagName.toLowerCase() + '.' + CSS.escape(cls);
+        return el.tagName.toLowerCase();
+    }
+    function labelFor(el) {
+        if (el.id) {
+            const l = document.querySelector('label[for="' + el.id + '"]');
+            if (l) return l.textContent.trim();
+        }
+        const p = el.closest('label');
+        if (p) return p.textContent.replace(el.value||'','').trim();
+        return el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.name || '';
+    }
+    const r = {url: location.href, inputs:[], checkboxes:[], radios:[], textareas:[], selects:[], buttons:[], links:[]};
+    const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+
+    document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="image"]):not([type="reset"])').forEach(el => {
+        if (!vis(el)) return;
+        r.inputs.push({selector: bestSel(el), type: el.type||'text', label: labelFor(el)});
+    });
+    document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+        r.checkboxes.push({selector: bestSel(el), label: labelFor(el), checked: el.checked});
+    });
+    document.querySelectorAll('input[type="radio"]').forEach(el => {
+        r.radios.push({selector: bestSel(el), label: labelFor(el), checked: el.checked, value: el.value});
+    });
+    document.querySelectorAll('textarea').forEach(el => {
+        if (!vis(el)) return;
+        r.textareas.push({selector: bestSel(el), label: labelFor(el)});
+    });
+    document.querySelectorAll('select').forEach(el => {
+        if (!vis(el)) return;
+        const opts = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
+        r.selects.push({selector: bestSel(el), label: labelFor(el), options: opts});
+    });
+    document.querySelectorAll('button,input[type="submit"],input[type="button"],input[type="reset"]').forEach(el => {
+        if (!vis(el)) return;
+        r.buttons.push({selector: bestSel(el), text: (el.textContent||el.value||'').trim(), type: el.type||'button'});
+    });
+    document.querySelectorAll('a[href]').forEach(el => {
+        if (!vis(el)) return;
+        const text = el.textContent.trim();
+        if (!text) return;
+        r.links.push({selector: bestSel(el), text: text.substring(0,60), href: el.getAttribute('href')});
+    });
+    return r;
+    """
+
+    async def _inspect_page(self, args: dict) -> str:
+        result = self.get_driver().execute_script(self._INSPECT_SCRIPT)
+        lines = [f"Page: {result['url']}", ""]
+
+        def section(title, items, fmt):
+            if not items:
+                return
+            lines.append(f"{title} ({len(items)}):")
+            for el in items:
+                lines.append("  " + fmt(el))
+
+        section("INPUTS", result["inputs"],
+                lambda e: f"[{e['type']}] {e['selector']}" + (f" — {e['label']}" if e["label"] else ""))
+        section("CHECKBOXES", result["checkboxes"],
+                lambda e: f"{e['selector']} — {e['label'] or 'unlabeled'} (checked={e['checked']})")
+        section("RADIOS", result["radios"],
+                lambda e: f"{e['selector']} value='{e['value']}'" + (" ✓" if e["checked"] else ""))
+        section("TEXTAREAS", result["textareas"],
+                lambda e: f"{e['selector']}" + (f" — {e['label']}" if e["label"] else ""))
+        section("SELECTS", result["selects"],
+                lambda e: f"{e['selector']} — {e['label'] or 'unlabeled'} → [{', '.join(e['options'][:6])}"
+                          + (f" +{len(e['options'])-6} more" if len(e['options']) > 6 else "") + "]")
+
+        if result["buttons"]:
+            lines.append(f"\nBUTTONS ({len(result['buttons'])}):")
+            for e in result["buttons"]:
+                lines.append(f"  [{e['type']}] {e['selector']} — '{e['text']}'")
+
+        if result["links"]:
+            shown = result["links"][:15]
+            lines.append(f"\nLINKS ({len(result['links'])}):")
+            for e in shown:
+                lines.append(f"  {e['selector']} — '{e['text']}' → {e['href']}")
+            if len(result["links"]) > 15:
+                lines.append(f"  … +{len(result['links'])-15} more")
+
+        total = sum(len(result[k]) for k in result if k != "url")
+        if total == 0:
+            return f"No interactive elements found on {result['url']}"
+        return "\n".join(lines)
+
+    # ── Network interception ─────────────────────────────────────────── #
+
+    async def _get_network_logs(self, args: dict) -> str:
+        url_filter    = args.get("url_filter", "")
+        method_filter = args.get("method", "").upper()
+        limit         = args.get("limit", 50)
+
+        try:
+            perf_logs = self.get_driver().get_log("performance")
+        except Exception as e:
+            return f"Could not get performance logs: {e}"
+
+        requests: dict = {}
+        for entry in perf_logs:
+            try:
+                msg    = json.loads(entry["message"])["message"]
+                method = msg.get("method", "")
+                params = msg.get("params", {})
+                rid    = params.get("requestId", "")
+
+                if method == "Network.requestWillBeSent":
+                    req = params.get("request", {})
+                    requests[rid] = {
+                        "url":    req.get("url", ""),
+                        "method": req.get("method", "GET"),
+                        "status": None,
+                        "ms":     None,
+                        "ts":     params.get("timestamp", 0),
+                    }
+                elif method == "Network.responseReceived" and rid in requests:
+                    resp = params.get("response", {})
+                    requests[rid]["status"] = resp.get("status")
+                    elapsed = params.get("timestamp", requests[rid]["ts"]) - requests[rid]["ts"]
+                    requests[rid]["ms"] = round(elapsed * 1000)
+            except Exception:
+                continue
+
+        entries = list(requests.values())
+        if url_filter:
+            entries = [e for e in entries if url_filter.lower() in e["url"].lower()]
+        if method_filter:
+            entries = [e for e in entries if e["method"] == method_filter]
+        entries = entries[-limit:]
+
+        if not entries:
+            return "No network requests captured." + ("" if perf_logs else " Performance logging requires Chrome.")
+
+        lines = [f"Network requests ({len(entries)}):"]
+        for e in entries:
+            status = str(e["status"]) if e["status"] else "---"
+            ms     = f"{e['ms']}ms" if e["ms"] is not None else "?"
+            url    = e["url"][:80] + ("…" if len(e["url"]) > 80 else "")
+            lines.append(f"  {e['method']:<6} {status}  {url}  ({ms})")
+        return "\n".join(lines)
+
+    _MOCK_INJECT = """
+    window.__smcpMocks = window.__smcpMocks || [];
+    window.__smcpMocks.push({pattern: arguments[0], status: arguments[1], body: arguments[2], ct: arguments[3]});
+    if (!window.__smcpMockOn) {
+        window.__smcpMockOn = true;
+        const _f = window.fetch;
+        window.fetch = function(url, opts) {
+            const u = typeof url === 'string' ? url : (url && url.url) || '';
+            for (const m of (window.__smcpMocks || [])) {
+                try { if (u.includes(m.pattern) || new RegExp(m.pattern).test(u))
+                    return Promise.resolve(new Response(m.body, {status: m.status, headers: {'Content-Type': m.ct}}));
+                } catch(e) {}
+            }
+            return _f.apply(this, arguments);
+        };
+    }
+    return window.__smcpMocks.length;
+    """
+
+    async def _mock_response(self, args: dict) -> str:
+        pattern = args["url_pattern"]
+        status  = args.get("status", 200)
+        body    = args.get("body", "{}")
+        ct      = args.get("content_type", "application/json")
+        count   = self.get_driver().execute_script(self._MOCK_INJECT, pattern, status, body, ct)
+        self.record("mock_response", url_pattern=pattern, status=status)
+        return f"✅ Mock added ({count} active): '{pattern}' → {status} {ct}"
+
+    async def _clear_mock_responses(self, args: dict) -> str:
+        self.get_driver().execute_script(
+            "window.__smcpMocks = []; window.__smcpMockOn = false;"
+        )
+        return "✅ All mock responses cleared"
+
+    # ── Visual regression ─────────────────────────────────────────────── #
+
+    async def _compare_screenshot(self, args: dict) -> str:
+        name      = args.get("name", "default").replace("/", "_")
+        update    = args.get("update_baseline", False)
+        threshold = args.get("threshold", 0.1)
+
+        baseline_dir = os.path.join(os.getcwd(), ".smcp_baselines")
+        os.makedirs(baseline_dir, exist_ok=True)
+        baseline_path = os.path.join(baseline_dir, f"{name}.png")
+
+        current = self.get_driver().get_screenshot_as_png()
+
+        if update or not os.path.exists(baseline_path):
+            with open(baseline_path, "wb") as f:
+                f.write(current)
+            return f"✅ Baseline saved: '{name}' ({len(current):,} bytes → {baseline_path})"
+
+        with open(baseline_path, "rb") as f:
+            baseline = f.read()
+
+        try:
+            from PIL import Image, ImageChops
+            img1 = Image.open(io.BytesIO(baseline)).convert("RGB")
+            img2 = Image.open(io.BytesIO(current)).convert("RGB")
+
+            if img1.size != img2.size:
+                return (f"⚠️ Size mismatch — baseline {img1.size} vs current {img2.size}. "
+                        f"Use update_baseline=true to reset.")
+
+            diff    = ImageChops.difference(img1, img2)
+            pixels  = list(diff.getdata())
+            changed = sum(1 for p in pixels if any(c > 10 for c in p))
+            pct     = round(100.0 * changed / len(pixels), 3)
+
+            if pct <= threshold:
+                return f"✅ Match ({pct:.3f}% diff ≤ {threshold}% threshold) — '{name}'"
+            return f"❌ Diff detected ({pct:.3f}% > {threshold}% threshold) — '{name}'"
+
+        except ImportError:
+            if current == baseline:
+                return f"✅ Identical (byte match) — '{name}' (install Pillow for pixel diff)"
+            diff  = sum(a != b for a, b in zip(current, baseline))
+            pct   = round(100.0 * diff / max(len(current), len(baseline)), 2)
+            verdict = "✅" if pct <= threshold else "⚠️"
+            return (f"{verdict} {pct:.2f}% byte diff — '{name}' "
+                    f"(install Pillow for accurate pixel comparison: pip install Pillow)")
+
+    # ── Accessibility audit ───────────────────────────────────────────── #
+
+    _A11Y_SCRIPT = """
+    const issues = [];
+    const $ = s => Array.from(document.querySelectorAll(s));
+    const el2str = el => el.outerHTML.substring(0, 100).replace(/\\n/g, ' ');
+
+    if (!document.title || !document.title.trim())
+        issues.push({impact:'serious', id:'document-title', desc:'Page must have a title', el:'<title>'});
+
+    if (!document.documentElement.lang)
+        issues.push({impact:'serious', id:'html-has-lang', desc:'<html> must have a lang attribute', el:'<html>'});
+
+    $('img').forEach(el => {
+        if (!el.hasAttribute('alt'))
+            issues.push({impact:'critical', id:'image-alt', desc:'Images must have alt text', el:el2str(el)});
+    });
+
+    $('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=image]):not([type=reset])').forEach(el => {
+        const hasLabel = el.id && document.querySelector('label[for="'+el.id+'"]');
+        if (!hasLabel && !el.getAttribute('aria-label') && !el.getAttribute('aria-labelledby') && !el.getAttribute('title'))
+            issues.push({impact:'serious', id:'label', desc:'Form inputs must have a label', el:el2str(el)});
+    });
+
+    $('button').forEach(el => {
+        if (!el.textContent.trim() && !el.getAttribute('aria-label') && !el.getAttribute('title'))
+            issues.push({impact:'serious', id:'button-name', desc:'Buttons must have accessible names', el:el2str(el)});
+    });
+
+    $('a').forEach(el => {
+        if (!el.textContent.trim() && !el.getAttribute('aria-label') && !el.querySelector('img[alt]'))
+            issues.push({impact:'serious', id:'link-name', desc:'Links must have accessible names', el:el2str(el)});
+    });
+
+    const h1s = $('h1');
+    if (!h1s.length)
+        issues.push({impact:'moderate', id:'page-has-h1', desc:'Page should have an <h1>', el:'<body>'});
+    else if (h1s.length > 1)
+        issues.push({impact:'moderate', id:'multiple-h1', desc:'Page should not have more than one <h1>', el:'<body>'});
+
+    $('[onclick]:not(a):not(button):not(input):not(select):not(textarea)').forEach(el => {
+        if (!el.getAttribute('tabindex') && !el.getAttribute('role'))
+            issues.push({impact:'serious', id:'keyboard', desc:'onClick elements need tabindex and role for keyboard access', el:el2str(el)});
+    });
+
+    $('input[type=password]').forEach(el => {
+        if (!el.getAttribute('autocomplete'))
+            issues.push({impact:'minor', id:'autocomplete', desc:'Password inputs should have autocomplete attribute', el:el2str(el)});
+    });
+
+    return {url: location.href, issues};
+    """
+
+    _IMPACT_ORDER = {"critical": 0, "serious": 1, "moderate": 2, "minor": 3}
+
+    async def _check_accessibility(self, args: dict) -> str:
+        level  = args.get("level", "all")
+        result = self.get_driver().execute_script(self._A11Y_SCRIPT)
+        issues = result.get("issues", [])
+
+        if level != "all":
+            issues = [i for i in issues if i["impact"] == level]
+
+        issues.sort(key=lambda i: self._IMPACT_ORDER.get(i["impact"], 4))
+
+        if not issues:
+            return f"✅ No accessibility issues found on {result['url']}"
+
+        counts: dict = {}
+        for i in issues:
+            counts[i["impact"]] = counts.get(i["impact"], 0) + 1
+        summary = ", ".join(
+            f"{v} {k}" for k, v in sorted(counts.items(), key=lambda x: self._IMPACT_ORDER.get(x[0], 4))
+        )
+
+        lines = [
+            f"Accessibility audit: {len(issues)} issue(s) — {summary}",
+            f"Page: {result['url']}",
+            "",
+        ]
+        for i in issues:
+            lines.append(f"[{i['impact']}] {i['id']}: {i['desc']}")
+            lines.append(f"  {i['el']}")
+        return "\n".join(lines)
