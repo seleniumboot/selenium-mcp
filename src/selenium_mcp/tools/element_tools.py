@@ -359,6 +359,28 @@ class ElementTools:
                 },
             ),
             Tool(
+                name="fill_form",
+                description=(
+                    "Fill multiple form fields in a single call. Pass a map of CSS selector → value. "
+                    "Automatically handles text inputs, textareas, checkboxes (true/false), "
+                    "radio buttons, and <select> dropdowns. Optionally clicks a submit button at the end."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "fields": {
+                            "type": "object",
+                            "description": "Map of selector → value. Checkboxes: 'true'/'false'. Selects: visible text or value.",
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "by":      {"type": "string", "default": "css"},
+                        "timeout": {"type": "integer", "default": 10},
+                        "submit":  {"type": "string", "description": "Selector of submit button to click after filling (optional)"},
+                    },
+                    "required": ["fields"],
+                },
+            ),
+            Tool(
                 name="get_healed_locators",
                 description="Return all self-healed locator mappings from this session. Shows which selectors were automatically repaired and what they were replaced with.",
                 inputSchema={"type": "object", "properties": {}},
@@ -501,6 +523,7 @@ class ElementTools:
             "wait_for_element":     self._wait_for_element,
             "scroll_to_element":    self._scroll_to_element,
             "clear_field":          self._clear_field,
+            "fill_form":                self._fill_form,
             "get_healed_locators":      self._get_healed_locators,
             "clear_healed_locators":    self._clear_healed_locators,
             "accept_alert":             self._accept_alert,
@@ -635,6 +658,84 @@ class ElementTools:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         el.clear()
         return f"✅ Cleared '{args['selector']}'{self._heal_note()}"
+
+    # ------------------------------------------------------------------ #
+    #  fill_form handler                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _fill_one(self, el, selector: str, value: str, by: str) -> str:
+        """Fill a single element; return a short summary line."""
+        tag = el.tag_name.lower()
+        input_type = (el.get_attribute("type") or "text").lower()
+
+        if tag == "select":
+            sel_obj = Select(el)
+            try:
+                sel_obj.select_by_visible_text(value)
+                self.browser.record("select_option", selector=selector, by=by, by_text=value)
+            except Exception:
+                sel_obj.select_by_value(value)
+                self.browser.record("select_option", selector=selector, by=by, by_value=value)
+            return f"  select  {selector!r} → '{value}'"
+
+        elif input_type == "checkbox":
+            want = value.strip().lower() in ("true", "1", "yes", "on", "checked")
+            if el.is_selected() != want:
+                el.click()
+                self.browser.record("click", selector=selector, by=by)
+            state = "checked" if want else "unchecked"
+            return f"  checkbox {selector!r} → {state}"
+
+        elif input_type == "radio":
+            if not el.is_selected():
+                el.click()
+                self.browser.record("click", selector=selector, by=by)
+            return f"  radio   {selector!r} → selected"
+
+        elif input_type == "file":
+            el.send_keys(value)
+            self.browser.record("upload_file", selector=selector, by=by, file_path=value)
+            return f"  file    {selector!r} → '{value}'"
+
+        else:
+            el.clear()
+            el.send_keys(value)
+            sel_lower = selector.lower()
+            logged = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else value
+            self.browser.record("type_text", selector=selector, by=by, text=logged)
+            return f"  input   {selector!r} → '{logged}'"
+
+    async def _fill_form(self, args: dict) -> str:
+        fields: dict = args.get("fields", {})
+        by = args.get("by", "css")
+        timeout = args.get("timeout", 10)
+        submit_sel = args.get("submit", "")
+
+        if not fields:
+            return "❌ No fields provided."
+
+        results = []
+        errors  = []
+        for selector, value in fields.items():
+            try:
+                el = self._find(selector, by, timeout)
+                results.append(self._fill_one(el, selector, value, by))
+            except Exception as e:
+                errors.append(f"  ❌ {selector!r}: {e}")
+
+        if submit_sel:
+            try:
+                self._find_clickable(submit_sel, by, timeout).click()
+                self.browser.record("click", selector=submit_sel, by=by)
+                results.append(f"  submit  {submit_sel!r} → clicked")
+            except Exception as e:
+                errors.append(f"  ❌ submit {submit_sel!r}: {e}")
+
+        summary = f"✅ Filled {len(results)} field(s)"
+        if errors:
+            summary += f", {len(errors)} error(s)"
+        lines = [summary] + results + errors
+        return "\n".join(lines)
 
     async def _get_healed_locators(self, args: dict) -> str:
         cache = self.browser._healer_cache

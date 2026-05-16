@@ -3,8 +3,10 @@ Browser Tools — start, stop, navigate, screenshot, window management,
 cookies, localStorage/sessionStorage, console logs, mobile emulation, page scroll
 """
 
+import asyncio
 import base64
 import json
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -282,6 +284,35 @@ class BrowserTools:
                     "required": ["key", "value"],
                 },
             ),
+            # ── Network idle ─────────────────────────────────────────── #
+            Tool(
+                name="wait_for_network_idle",
+                description=(
+                    "Wait until there are no active XHR/fetch requests for a quiet period. "
+                    "Essential for SPAs and pages that load data asynchronously. "
+                    "Also waits for document.readyState to be 'complete'."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "idle_time_ms": {
+                            "type": "integer",
+                            "default": 500,
+                            "description": "Milliseconds of network silence required",
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "default": 15,
+                            "description": "Max seconds to wait before giving up",
+                        },
+                        "max_inflight": {
+                            "type": "integer",
+                            "default": 0,
+                            "description": "Tolerate up to N in-flight requests (0 = fully idle)",
+                        },
+                    },
+                },
+            ),
         ]
 
     # ------------------------------------------------------------------ #
@@ -315,8 +346,9 @@ class BrowserTools:
             "delete_all_cookies":  self._delete_all_cookies,
             "get_local_storage":   self._get_local_storage,
             "set_local_storage":   self._set_local_storage,
-            "get_session_storage": self._get_session_storage,
-            "set_session_storage": self._set_session_storage,
+            "get_session_storage":    self._get_session_storage,
+            "set_session_storage":    self._set_session_storage,
+            "wait_for_network_idle":  self._wait_for_network_idle,
         }
 
     # ── Browser lifecycle ────────────────────────────────────────────── #
@@ -563,3 +595,62 @@ class BrowserTools:
         )
         self.record("set_session_storage", key=args["key"], value=args["value"])
         return f"✅ sessionStorage['{args['key']}'] = '{args['value']}'"
+
+    # ── Network idle ─────────────────────────────────────────────────── #
+
+    _INJECT_TRACKER = """
+    if (!window.__smcpNet) {
+        window.__smcpNet = { active: 0, last: Date.now() };
+        const _track = (d) => {
+            window.__smcpNet.active = Math.max(0, window.__smcpNet.active + d);
+            window.__smcpNet.last = Date.now();
+        };
+        const _xhrOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function() {
+            _track(1);
+            this.addEventListener('loadend', () => _track(-1));
+            _xhrOpen.apply(this, arguments);
+        };
+        if (window.fetch) {
+            const _fetch = window.fetch;
+            window.fetch = function() {
+                _track(1);
+                return _fetch.apply(this, arguments).finally(() => _track(-1));
+            };
+        }
+    }
+    """
+
+    _POLL_TRACKER = """
+    const t = window.__smcpNet || { active: 0, last: Date.now() };
+    return { active: t.active, quietMs: Date.now() - t.last, readyState: document.readyState };
+    """
+
+    async def _wait_for_network_idle(self, args: dict) -> str:
+        idle_ms      = args.get("idle_time_ms", 500)
+        timeout      = args.get("timeout", 15)
+        max_inflight = args.get("max_inflight", 0)
+        driver = self.get_driver()
+
+        driver.execute_script(self._INJECT_TRACKER)
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            state     = driver.execute_script(self._POLL_TRACKER)
+            active    = state.get("active", 0)
+            quiet_ms  = state.get("quietMs", 0)
+            ready     = state.get("readyState", "")
+
+            if ready == "complete" and active <= max_inflight and quiet_ms >= idle_ms:
+                elapsed = round(time.monotonic() - (deadline - timeout), 2)
+                return (
+                    f"✅ Network idle — active={active}, "
+                    f"quiet for {quiet_ms}ms, readyState={ready} ({elapsed}s)"
+                )
+            await asyncio.sleep(0.1)
+
+        state = driver.execute_script(self._POLL_TRACKER)
+        return (
+            f"⚠️ Timed out after {timeout}s — "
+            f"active={state.get('active', '?')}, readyState={state.get('readyState', '?')}"
+        )

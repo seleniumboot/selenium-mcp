@@ -3,7 +3,7 @@
 A Python **Model Context Protocol (MCP)** server for Selenium WebDriver automation.
 Let Claude or GitHub Copilot control a real browser — navigate pages, interact with elements,
 run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / pytest** test code from recorded sessions.
-74 tools. No ChromeDriver setup. Browser auto-starts on first use.
+76 tools. No ChromeDriver setup. Browser auto-starts on first use.
 
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
@@ -85,7 +85,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (74 total)
+## Tools (76 total)
 
 ### Browser
 | Tool | Description |
@@ -113,6 +113,7 @@ Claude controls the real browser, records every action, and on request generates
 | `delete_cookie` / `delete_all_cookies` | Remove cookies |
 | `get_local_storage` / `set_local_storage` | Read or write localStorage |
 | `get_session_storage` / `set_session_storage` | Read or write sessionStorage |
+| `wait_for_network_idle` | Wait until XHR/fetch traffic is quiet — essential for SPAs |
 
 ### Elements
 | Tool | Description |
@@ -142,6 +143,7 @@ Claude controls the real browser, records every action, and on request generates
 | `switch_to_default_content` | Return to the main page from a frame |
 | `find_shadow_element` | Find element inside a shadow DOM |
 | `get_table_data` | Extract an HTML table as a formatted text grid |
+| `fill_form` | Fill multiple fields at once — auto-detects input/select/checkbox/radio |
 | `get_healed_locators` | View all self-healed selector mappings for the session |
 | `clear_healed_locators` | Reset the self-healing cache |
 
