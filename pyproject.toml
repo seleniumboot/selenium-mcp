@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seleniumboot-mcp"
-version = "0.2.3"
-description = "A Python MCP server for Selenium WebDriver — browser automation, Java TestNG/JUnit5/Cucumber codegen, and Page Object Model generation"
+version = "0.3.0"
+description = "A Python MCP server for Selenium WebDriver — 74 tools for browser automation, alerts, frames, shadow DOM, cookies, mobile emulation, self-healing locators, and codegen for Java/C#/Python/Playwright"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
