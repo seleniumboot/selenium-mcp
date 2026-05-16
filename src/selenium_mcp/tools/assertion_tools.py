@@ -7,17 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from mcp.types import Tool
-
-BY_MAP = {
-    "css":          By.CSS_SELECTOR,
-    "xpath":        By.XPATH,
-    "id":           By.ID,
-    "name":         By.NAME,
-    "tag":          By.TAG_NAME,
-    "class":        By.CLASS_NAME,
-    "link":         By.LINK_TEXT,
-    "partial_link": By.PARTIAL_LINK_TEXT,
-}
+from selenium_mcp.tools._locators import BY_MAP
 
 
 class AssertionTools:
@@ -174,7 +164,7 @@ class AssertionTools:
     async def _assert_url(self, args: dict) -> str:
         actual = self._driver().current_url
         exp = args["expected"]
-        ok = (actual == exp) if args.get("exact", False) else (exp in actual)
+        ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
         return self._pass(f"url='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_text(self, args: dict) -> str:

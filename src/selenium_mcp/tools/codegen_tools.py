@@ -3,6 +3,8 @@ Codegen Tools — generate Python (pytest) and Java (TestNG/JUnit5) test scripts
 from the recorded session log. This is the key differentiator for Java users.
 """
 
+import re
+from urllib.parse import urlparse
 from mcp.types import Tool
 
 
@@ -477,14 +479,12 @@ public class {test_name} {{
 
     def _url_to_page_name(self, url: str) -> str:
         try:
-            from urllib.parse import urlparse
             segment = urlparse(url).path.strip("/").split("/")[-1]
             return segment.capitalize() if segment else "Home"
         except Exception:
             return "Recorded"
 
     def _selector_to_name(self, selector: str, by: str) -> str:
-        import re
         sel = selector.strip()
         if by in ("id", "name"):
             return self._to_camel(sel)
@@ -516,7 +516,6 @@ public class {test_name} {{
         return "element"
 
     def _to_camel(self, s: str) -> str:
-        import re
         parts = [p for p in re.split(r"[_\-\s]+", s.strip()) if p]
         return (parts[0].lower() + "".join(p.capitalize() for p in parts[1:])) if parts else "element"
 
@@ -625,6 +624,14 @@ public class {test_name} {{
                 lines += [
                     f"{i}public {page_name} doubleClick{cap}() {{",
                     f"{i}{i}new Actions(driver).doubleClick(wait.until(ExpectedConditions.elementToBeClickable({name}))).perform();",
+                    f"{i}{i}return this;",
+                    f"{i}}}",
+                    "",
+                ]
+            if "right_click" in acts:
+                lines += [
+                    f"{i}public {page_name} rightClick{cap}() {{",
+                    f"{i}{i}new Actions(driver).contextClick(wait.until(ExpectedConditions.visibilityOfElementLocated({name}))).perform();",
                     f"{i}{i}return this;",
                     f"{i}}}",
                     "",
@@ -772,7 +779,6 @@ public class {test_name} {{
         )
 
     def _name_to_readable(self, name: str) -> str:
-        import re
         return re.sub(r'([A-Z])', r' \1', name).strip().lower()
 
     def _gherkin_step_text(self, entry: dict, key_to_name: dict, prefix: str) -> str:
@@ -916,6 +922,15 @@ public class {test_name} {{
                         f'{i}@And("I navigate back")\n'
                         f'{i}public void iNavigateBack() {{\n'
                         f'{i}{i}driver.navigate().back();\n'
+                        f'{i}}}'
+                    )
+            elif action == "go_forward":
+                if "go_forward" not in seen:
+                    seen.add("go_forward")
+                    methods.append(
+                        f'{i}@And("I navigate forward")\n'
+                        f'{i}public void iNavigateForward() {{\n'
+                        f'{i}{i}driver.navigate().forward();\n'
                         f'{i}}}'
                     )
             elif action == "refresh":

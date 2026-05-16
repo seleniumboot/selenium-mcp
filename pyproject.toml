@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seleniumboot-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "A Python MCP server for Selenium WebDriver — browser automation, Java TestNG/JUnit5/Cucumber codegen, and Page Object Model generation"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Panjatan", email = "panjatan.tech@gmail.com" }]
+authors = [{ name = "Raza Tech", email = "razatechnologyservices@gmail.com" }]
 keywords = ["selenium", "mcp", "test-automation", "webdriver", "testng", "junit", "model-context-protocol"]
 classifiers = [
     "Development Status :: 4 - Beta",

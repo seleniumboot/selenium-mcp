@@ -60,3 +60,7 @@ coverage.xml
 .env
 .env.*
 *.env
+
+# Internal code review / audit reports — not for public repo
+FINDINGS.md
+REVIEW.md

@@ -18,6 +18,7 @@ from selenium_mcp.tools.assertion_tools import AssertionTools
 from selenium_mcp.tools.codegen_tools import CodegenTools
 
 _log_path = Path(tempfile.gettempdir()) / "selenium-mcp.log"
+_log_path.touch(mode=0o600, exist_ok=True)
 logging.basicConfig(
     filename=str(_log_path),
     level=logging.DEBUG,

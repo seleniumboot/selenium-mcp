@@ -7,18 +7,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from mcp.types import Tool
-
-
-BY_MAP = {
-    "css":    By.CSS_SELECTOR,
-    "xpath":  By.XPATH,
-    "id":     By.ID,
-    "name":   By.NAME,
-    "tag":    By.TAG_NAME,
-    "class":  By.CLASS_NAME,
-    "link":   By.LINK_TEXT,
-    "partial_link": By.PARTIAL_LINK_TEXT,
-}
+from selenium_mcp.tools._locators import BY_MAP
 
 LOCATOR_SCHEMA = {
     "selector": {
@@ -273,7 +262,9 @@ class ElementTools:
         if args.get("clear_first", True):
             el.clear()
         el.send_keys(args["text"])
-        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=args["text"])
+        sel_lower = args["selector"].lower()
+        logged_text = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else args["text"]
+        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text)
         return f"✅ Typed into '{args['selector']}'"
 
     async def _get_text(self, args: dict) -> str:
@@ -323,8 +314,9 @@ class ElementTools:
     async def _drag_and_drop(self, args: dict) -> str:
         by = self._by(args.get("by", "css"))
         driver = self.browser.get_driver()
-        src = driver.find_element(by, args["source_selector"])
-        tgt = driver.find_element(by, args["target_selector"])
+        timeout = args.get("timeout", 10)
+        src = WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, args["source_selector"])))
+        tgt = WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, args["target_selector"])))
         ActionChains(driver).drag_and_drop(src, tgt).perform()
         return f"✅ Dragged '{args['source_selector']}' → '{args['target_selector']}'"
 

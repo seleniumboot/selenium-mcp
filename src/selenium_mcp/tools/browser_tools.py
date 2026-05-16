@@ -27,7 +27,8 @@ class BrowserTools:
             opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage")
             self.driver = webdriver.Chrome(options=opts)
-            self._session_log = []
+            # Do NOT reset _session_log here — only explicit start_browser should do that.
+            # Resetting here would wipe recorded actions if the browser crashes mid-session.
             self.record("start_browser", browser="chrome", headless=False)
         return self.driver
 
@@ -165,9 +166,9 @@ class BrowserTools:
         headless = args.get("headless", False)
         try:
             w, h = args.get("window_size", "1920x1080").lower().replace(" ", "").split("x")
-            int(w), int(h)
+            w, h = int(w), int(h)
         except (ValueError, AttributeError):
-            w, h = "1920", "1080"
+            w, h = 1920, 1080
 
         if browser == "chrome":
             opts = ChromeOptions()
