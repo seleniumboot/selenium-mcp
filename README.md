@@ -3,7 +3,7 @@
 A Python **Model Context Protocol (MCP)** server for Selenium WebDriver automation.
 Let Claude or GitHub Copilot control a real browser — navigate pages, interact with elements,
 run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / pytest** test code from recorded sessions.
-45 tools. No ChromeDriver setup. Browser auto-starts on first use.
+74 tools. No ChromeDriver setup. Browser auto-starts on first use.
 
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
@@ -85,7 +85,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (45 total)
+## Tools (74 total)
 
 ### Browser
 | Tool | Description |
@@ -100,7 +100,19 @@ Claude controls the real browser, records every action, and on request generates
 | `go_back` / `go_forward` | Browser history |
 | `refresh` | Reload page |
 | `switch_to_window` | Switch between tabs by index |
+| `open_new_tab` | Open a new browser tab, optionally at a URL |
+| `close_current_tab` | Close the active tab and switch to the previous |
+| `list_windows` | List all open tabs with index, title, and URL |
 | `close_browser` | Quit the browser |
+| `scroll_to_top` | Scroll page to the top |
+| `scroll_to_bottom` | Scroll page to the bottom |
+| `scroll_by` | Scroll page by x/y pixels |
+| `emulate_device` | Emulate a mobile device (iPhone, iPad, Pixel, Galaxy) via CDP |
+| `get_console_logs` | Get browser console errors/warnings/info (Chrome) |
+| `get_cookies` / `set_cookie` | Read or write a cookie |
+| `delete_cookie` / `delete_all_cookies` | Remove cookies |
+| `get_local_storage` / `set_local_storage` | Read or write localStorage |
+| `get_session_storage` / `set_session_storage` | Read or write sessionStorage |
 
 ### Elements
 | Tool | Description |
@@ -121,6 +133,15 @@ Claude controls the real browser, records every action, and on request generates
 | `wait_for_element` | Wait: visible / clickable / present / invisible |
 | `scroll_to_element` | Scroll element into view |
 | `clear_field` | Clear input field |
+| `send_keys` | Send special keys (Tab, Enter, Escape, Ctrl+A, F5, …) |
+| `upload_file` | Upload a file via `<input type="file">` |
+| `accept_alert` / `dismiss_alert` | Handle JS alert/confirm dialogs |
+| `get_alert_text` | Read the message from an alert |
+| `type_in_alert` | Type into a JS prompt and accept |
+| `switch_to_frame` | Focus into an iframe by index, name, or selector |
+| `switch_to_default_content` | Return to the main page from a frame |
+| `find_shadow_element` | Find element inside a shadow DOM |
+| `get_table_data` | Extract an HTML table as a formatted text grid |
 | `get_healed_locators` | View all self-healed selector mappings for the session |
 | `clear_healed_locators` | Reset the self-healing cache |
 
@@ -144,6 +165,9 @@ Claude controls the real browser, records every action, and on request generates
 | `generate_java_page_object` | Java Page Object class + test class from session |
 | `generate_gherkin` | Gherkin `.feature` file + Java step definitions from session |
 | `generate_python_test` | pytest class from session |
+| `generate_csharp_nunit` | C# NUnit + Selenium test class from session |
+| `generate_github_actions` | GitHub Actions CI workflow YAML (Maven / Gradle / pytest) |
+| `generate_playwright_hints` | Equivalent Playwright TypeScript code from session |
 | `get_session_log` | View recorded actions |
 | `clear_session_log` | Reset the session recording |
 
@@ -263,7 +287,18 @@ Successful fallbacks are **cached** so the healed selector is reused automatical
 - [x] Page Object Model generation (`generate_java_page_object`)
 - [x] Cucumber / Gherkin step generation (`generate_gherkin`)
 - [x] Self-healing locators — automatic fallback when a selector breaks
-- [ ] CI/CD config generator (GitHub Actions, Jenkins)
+- [x] Alert/dialog handling, iframe switching, shadow DOM, table extraction
+- [x] Cookie, localStorage, sessionStorage management
+- [x] Mobile device emulation via Chrome DevTools Protocol
+- [x] Special key sending (Tab, Enter, F-keys, Ctrl+A, …)
+- [x] File upload via `<input type="file">`
+- [x] Browser console log capture
+- [x] Multi-tab management (open, close, list)
+- [x] Page scroll (top, bottom, by pixels)
+- [x] C# NUnit + Selenium codegen
+- [x] GitHub Actions CI workflow generator (Maven / Gradle / pytest)
+- [x] Playwright TypeScript migration hints
+- [ ] CI/CD config for Jenkins / GitLab CI
 
 ---
 

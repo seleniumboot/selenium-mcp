@@ -6,11 +6,28 @@ strategies are tried automatically and the successful one is cached.
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from mcp.types import Tool
 from selenium_mcp.tools._locators import BY_MAP
+
+_SPECIAL_KEYS: dict[str, str] = {
+    "tab": Keys.TAB, "enter": Keys.RETURN, "escape": Keys.ESCAPE,
+    "space": Keys.SPACE, "backspace": Keys.BACK_SPACE, "delete": Keys.DELETE,
+    "up": Keys.ARROW_UP, "down": Keys.ARROW_DOWN,
+    "left": Keys.ARROW_LEFT, "right": Keys.ARROW_RIGHT,
+    "home": Keys.HOME, "end": Keys.END,
+    "page_up": Keys.PAGE_UP, "page_down": Keys.PAGE_DOWN,
+    "f1": Keys.F1, "f2": Keys.F2, "f3": Keys.F3, "f4": Keys.F4,
+    "f5": Keys.F5, "f6": Keys.F6, "f7": Keys.F7, "f8": Keys.F8,
+    "f9": Keys.F9, "f10": Keys.F10, "f11": Keys.F11, "f12": Keys.F12,
+}
+_MODIFIERS: dict[str, str] = {
+    "ctrl": Keys.CONTROL, "shift": Keys.SHIFT,
+    "alt": Keys.ALT, "meta": Keys.META,
+}
 
 LOCATOR_SCHEMA = {
     "selector": {
@@ -351,6 +368,119 @@ class ElementTools:
                 description="Clear the self-healing locator cache so all selectors are re-evaluated from scratch.",
                 inputSchema={"type": "object", "properties": {}},
             ),
+            # ── Alerts / dialogs ──────────────────────────────────────── #
+            Tool(
+                name="accept_alert",
+                description="Accept (OK) a JavaScript alert, confirm, or prompt dialog.",
+                inputSchema={"type": "object", "properties": {
+                    "timeout": {"type": "integer", "default": 5}
+                }},
+            ),
+            Tool(
+                name="dismiss_alert",
+                description="Dismiss (Cancel) a JavaScript confirm or prompt dialog.",
+                inputSchema={"type": "object", "properties": {
+                    "timeout": {"type": "integer", "default": 5}
+                }},
+            ),
+            Tool(
+                name="get_alert_text",
+                description="Return the text message of a currently open JavaScript alert/confirm/prompt.",
+                inputSchema={"type": "object", "properties": {
+                    "timeout": {"type": "integer", "default": 5}
+                }},
+            ),
+            Tool(
+                name="type_in_alert",
+                description="Type text into a JavaScript prompt dialog, then accept it.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "timeout": {"type": "integer", "default": 5},
+                    },
+                    "required": ["text"],
+                },
+            ),
+            # ── Frame / iframe switching ──────────────────────────────── #
+            Tool(
+                name="switch_to_frame",
+                description="Switch focus into an iframe. Provide index (integer), name/id (string), or a CSS/XPath selector.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "index":    {"type": "integer", "description": "Frame index"},
+                        "name":     {"type": "string",  "description": "Frame name or id attribute"},
+                        "selector": {"type": "string",  "description": "CSS/XPath to locate the iframe element"},
+                        "by":       {"type": "string",  "default": "css"},
+                        "timeout":  {"type": "integer", "default": 10},
+                    },
+                },
+            ),
+            Tool(
+                name="switch_to_default_content",
+                description="Switch back to the main page content from inside a frame.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            # ── Keyboard ─────────────────────────────────────────────── #
+            Tool(
+                name="send_keys",
+                description=(
+                    "Send a key or key combination to the focused element (or a specific element if selector is given). "
+                    "Use key names like 'tab', 'enter', 'escape', 'up', 'down', 'f5', or combos like 'ctrl+a', 'shift+tab'."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "key":      {"type": "string", "description": "Key name or combo e.g. 'tab', 'ctrl+a', 'enter'"},
+                        "selector": {"type": "string", "description": "Element to focus before sending (optional)"},
+                        "by":       {"type": "string", "default": "css"},
+                        "timeout":  {"type": "integer", "default": 10},
+                    },
+                    "required": ["key"],
+                },
+            ),
+            # ── File upload ───────────────────────────────────────────── #
+            Tool(
+                name="upload_file",
+                description="Upload a file by sending its absolute path to an <input type='file'> element.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        **LOCATOR_SCHEMA,
+                        "file_path": {"type": "string", "description": "Absolute path to the file to upload"},
+                    },
+                    "required": ["selector", "file_path"],
+                },
+            ),
+            # ── Shadow DOM ────────────────────────────────────────────── #
+            Tool(
+                name="find_shadow_element",
+                description="Find an element inside a shadow DOM. Provide the host element selector and then the selector for the element inside the shadow root.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "host_selector":   {"type": "string", "description": "CSS selector of the shadow host element"},
+                        "shadow_selector": {"type": "string", "description": "CSS selector inside the shadow root"},
+                        "timeout":         {"type": "integer", "default": 10},
+                    },
+                    "required": ["host_selector", "shadow_selector"],
+                },
+            ),
+            # ── Table extraction ──────────────────────────────────────── #
+            Tool(
+                name="get_table_data",
+                description="Extract data from an HTML table as a formatted text grid.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "selector": {"type": "string", "description": "CSS/XPath selector for the <table> element"},
+                        "by":       {"type": "string", "default": "css"},
+                        "timeout":  {"type": "integer", "default": 10},
+                    },
+                    "required": ["selector"],
+                },
+            ),
         ]
 
     def get_handlers(self) -> dict:
@@ -371,8 +501,18 @@ class ElementTools:
             "wait_for_element":     self._wait_for_element,
             "scroll_to_element":    self._scroll_to_element,
             "clear_field":          self._clear_field,
-            "get_healed_locators":  self._get_healed_locators,
-            "clear_healed_locators":self._clear_healed_locators,
+            "get_healed_locators":      self._get_healed_locators,
+            "clear_healed_locators":    self._clear_healed_locators,
+            "accept_alert":             self._accept_alert,
+            "dismiss_alert":            self._dismiss_alert,
+            "get_alert_text":           self._get_alert_text,
+            "type_in_alert":            self._type_in_alert,
+            "switch_to_frame":          self._switch_to_frame,
+            "switch_to_default_content":self._switch_to_default_content,
+            "send_keys":                self._send_keys,
+            "upload_file":              self._upload_file,
+            "find_shadow_element":      self._find_shadow_element,
+            "get_table_data":           self._get_table_data,
         }
 
     # ------------------------------------------------------------------ #
@@ -509,3 +649,155 @@ class ElementTools:
         count = len(self.browser._healer_cache)
         self.browser._healer_cache.clear()
         return f"✅ Cleared {count} healed locator(s) from cache."
+
+    # ------------------------------------------------------------------ #
+    #  Alert / dialog handlers                                            #
+    # ------------------------------------------------------------------ #
+
+    def _wait_alert(self, timeout: int):
+        return WebDriverWait(self.browser.get_driver(), timeout).until(
+            EC.alert_is_present()
+        )
+
+    async def _accept_alert(self, args: dict) -> str:
+        alert = self._wait_alert(args.get("timeout", 5))
+        text = alert.text
+        alert.accept()
+        self.browser.record("accept_alert")
+        return f"✅ Alert accepted: '{text}'"
+
+    async def _dismiss_alert(self, args: dict) -> str:
+        alert = self._wait_alert(args.get("timeout", 5))
+        text = alert.text
+        alert.dismiss()
+        self.browser.record("dismiss_alert")
+        return f"✅ Alert dismissed: '{text}'"
+
+    async def _get_alert_text(self, args: dict) -> str:
+        alert = self._wait_alert(args.get("timeout", 5))
+        return alert.text
+
+    async def _type_in_alert(self, args: dict) -> str:
+        alert = self._wait_alert(args.get("timeout", 5))
+        alert.send_keys(args["text"])
+        alert.accept()
+        self.browser.record("type_in_alert", text=args["text"])
+        return f"✅ Typed '{args['text']}' in alert and accepted"
+
+    # ------------------------------------------------------------------ #
+    #  Frame / iframe handlers                                            #
+    # ------------------------------------------------------------------ #
+
+    async def _switch_to_frame(self, args: dict) -> str:
+        driver = self.browser.get_driver()
+        if "index" in args:
+            driver.switch_to.frame(args["index"])
+            self.browser.record("switch_to_frame", index=args["index"])
+            return f"✅ Switched to frame[{args['index']}]"
+        elif "name" in args:
+            driver.switch_to.frame(args["name"])
+            self.browser.record("switch_to_frame", name=args["name"])
+            return f"✅ Switched to frame '{args['name']}'"
+        elif "selector" in args:
+            el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+            driver.switch_to.frame(el)
+            self.browser.record("switch_to_frame", selector=args["selector"])
+            return f"✅ Switched to frame '{args['selector']}'"
+        return "❌ Provide index, name, or selector"
+
+    async def _switch_to_default_content(self, args: dict) -> str:
+        self.browser.get_driver().switch_to.default_content()
+        self.browser.record("switch_to_default_content")
+        return "✅ Switched back to main content"
+
+    # ------------------------------------------------------------------ #
+    #  Keyboard handler                                                   #
+    # ------------------------------------------------------------------ #
+
+    async def _send_keys(self, args: dict) -> str:
+        key_str = args["key"].lower().strip()
+        driver = self.browser.get_driver()
+
+        # Parse modifier+key combos like "ctrl+a", "shift+tab"
+        parts = [p.strip() for p in key_str.split("+")]
+        if len(parts) > 1:
+            modifier_keys = [_MODIFIERS[p] for p in parts[:-1] if p in _MODIFIERS]
+            last = parts[-1]
+            key_val = _SPECIAL_KEYS.get(last, last)
+            chain = ActionChains(driver)
+            for mod in modifier_keys:
+                chain = chain.key_down(mod)
+            chain = chain.send_keys(key_val)
+            for mod in reversed(modifier_keys):
+                chain = chain.key_up(mod)
+            chain.perform()
+        else:
+            key_val = _SPECIAL_KEYS.get(key_str, key_str)
+            if "selector" in args:
+                el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+                el.send_keys(key_val)
+            else:
+                ActionChains(driver).send_keys(key_val).perform()
+
+        self.browser.record("send_keys", key=args["key"],
+                            selector=args.get("selector", ""), by=args.get("by", "css"))
+        return f"✅ Sent key '{args['key']}'"
+
+    # ------------------------------------------------------------------ #
+    #  File upload handler                                                #
+    # ------------------------------------------------------------------ #
+
+    async def _upload_file(self, args: dict) -> str:
+        el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        el.send_keys(args["file_path"])
+        self.browser.record("upload_file", selector=args["selector"],
+                            by=args.get("by", "css"), file_path=args["file_path"])
+        return f"✅ Uploaded '{args['file_path']}' to '{args['selector']}'"
+
+    # ------------------------------------------------------------------ #
+    #  Shadow DOM handler                                                 #
+    # ------------------------------------------------------------------ #
+
+    async def _find_shadow_element(self, args: dict) -> str:
+        driver = self.browser.get_driver()
+        timeout = args.get("timeout", 10)
+        host = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, args["host_selector"]))
+        )
+        shadow_root = driver.execute_script("return arguments[0].shadowRoot", host)
+        if shadow_root is None:
+            return f"❌ No shadow root on '{args['host_selector']}'"
+        el = shadow_root.find_element(By.CSS_SELECTOR, args["shadow_selector"])
+        return f"tag={el.tag_name} | text='{el.text}' | displayed={el.is_displayed()}"
+
+    # ------------------------------------------------------------------ #
+    #  Table extraction handler                                           #
+    # ------------------------------------------------------------------ #
+
+    async def _get_table_data(self, args: dict) -> str:
+        table = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        rows = table.find_elements(By.TAG_NAME, "tr")
+        grid: list[list[str]] = []
+        for row in rows:
+            cells = row.find_elements(By.XPATH, "th|td")
+            grid.append([c.text.strip() for c in cells])
+
+        if not grid:
+            return "Table found but no rows."
+
+        # Calculate column widths for aligned output
+        col_count = max(len(r) for r in grid)
+        widths = [0] * col_count
+        for row in grid:
+            for ci, cell in enumerate(row):
+                widths[ci] = max(widths[ci], len(cell))
+
+        lines = []
+        for ri, row in enumerate(grid):
+            padded = [row[ci].ljust(widths[ci]) if ci < len(row) else " " * widths[ci]
+                      for ci in range(col_count)]
+            lines.append(" | ".join(padded))
+            if ri == 0:
+                lines.append("-+-".join("-" * w for w in widths))
+
+        return f"{len(rows)} row(s), {col_count} column(s):\n" + "\n".join(lines)

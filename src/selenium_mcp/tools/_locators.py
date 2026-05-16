@@ -1,5 +1,3 @@
-"""Shared locator strategy map — imported by element_tools and assertion_tools."""
-
 from selenium.webdriver.common.by import By
 
 BY_MAP = {

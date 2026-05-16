@@ -112,6 +112,42 @@ class CodegenTools:
                 },
             ),
             Tool(
+                name="generate_csharp_nunit",
+                description="Generate a C# NUnit + Selenium test class from the current browser session.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "test_name":   {"type": "string", "default": "RecordedFlowTests"},
+                        "namespace":   {"type": "string", "default": "SeleniumTests"},
+                    },
+                },
+            ),
+            Tool(
+                name="generate_github_actions",
+                description="Generate a GitHub Actions CI workflow YAML for running the recorded test session.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "language": {
+                            "type": "string",
+                            "enum": ["java_maven", "java_gradle", "python_pytest"],
+                            "default": "java_maven",
+                        },
+                        "java_version": {"type": "string", "default": "17"},
+                    },
+                },
+            ),
+            Tool(
+                name="generate_playwright_hints",
+                description="Generate equivalent Playwright (TypeScript) code hints from the recorded browser session.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "test_name": {"type": "string", "default": "recordedFlow"},
+                    },
+                },
+            ),
+            Tool(
                 name="generate_java_page_object",
                 description=(
                     "Generate a Java Page Object class + matching test class from the recorded session. "
@@ -148,6 +184,9 @@ class CodegenTools:
             "clear_session_log":          self._clear_session_log,
             "generate_java_page_object":  self._generate_java_page_object,
             "generate_gherkin":           self._generate_gherkin,
+            "generate_csharp_nunit":      self._generate_csharp_nunit,
+            "generate_github_actions":    self._generate_github_actions,
+            "generate_playwright_hints":  self._generate_playwright_hints,
         }
 
     # ------------------------------------------------------------------ #
@@ -251,6 +290,59 @@ class {class_name}:
             elif action == "execute_script":
                 script = entry.get("script", "").replace('"', '\\"')
                 lines.append(f'{indent}self.driver.execute_script("{script}")')
+            elif action == "send_keys":
+                key = entry.get("key", "")
+                sel = entry.get("selector", "")
+                if sel:
+                    lines.append(f'{indent}self.wait.until(EC.presence_of_element_located(({by_const}, "{sel}"))).send_keys(Keys.{key.upper().replace("+", "_")})')
+                else:
+                    lines.append(f'{indent}ActionChains(self.driver).send_keys(Keys.{key.upper().replace("+", "_")}).perform()')
+            elif action == "accept_alert":
+                lines.append(f'{indent}self.wait.until(EC.alert_is_present())')
+                lines.append(f'{indent}self.driver.switch_to.alert.accept()')
+            elif action == "dismiss_alert":
+                lines.append(f'{indent}self.wait.until(EC.alert_is_present())')
+                lines.append(f'{indent}self.driver.switch_to.alert.dismiss()')
+            elif action == "type_in_alert":
+                text = entry.get("text", "")
+                lines.append(f'{indent}self.wait.until(EC.alert_is_present())')
+                lines.append(f'{indent}alert = self.driver.switch_to.alert')
+                lines.append(f'{indent}alert.send_keys("{text}")')
+                lines.append(f'{indent}alert.accept()')
+            elif action == "switch_to_frame":
+                if "index" in entry:
+                    lines.append(f'{indent}self.driver.switch_to.frame({entry["index"]})')
+                elif "name" in entry:
+                    lines.append(f'{indent}self.driver.switch_to.frame("{entry["name"]}")')
+                elif "selector" in entry:
+                    lines.append(f'{indent}self.driver.switch_to.frame(self.driver.find_element({by_const}, "{entry["selector"]}"))')
+            elif action == "switch_to_default_content":
+                lines.append(f'{indent}self.driver.switch_to.default_content()')
+            elif action == "upload_file":
+                sel = entry.get("selector", "")
+                path = entry.get("file_path", "")
+                lines.append(f'{indent}self.driver.find_element({by_const}, "{sel}").send_keys("{path}")')
+            elif action == "set_cookie":
+                lines.append(f'{indent}self.driver.add_cookie({{"name": "{entry["name"]}", "value": "{entry["value"]}"}})')
+            elif action == "set_local_storage":
+                lines.append(f'{indent}self.driver.execute_script("window.localStorage.setItem(\'{entry["key"]}\', \'{entry["value"]}\');")')
+            elif action == "set_session_storage":
+                lines.append(f'{indent}self.driver.execute_script("window.sessionStorage.setItem(\'{entry["key"]}\', \'{entry["value"]}\');")')
+            elif action == "open_new_tab":
+                url = entry.get("url", "")
+                lines.append(f'{indent}self.driver.execute_script("window.open(\'{url}\');")')
+                lines.append(f'{indent}self.driver.switch_to.window(self.driver.window_handles[-1])')
+            elif action == "close_current_tab":
+                lines.append(f'{indent}self.driver.close()')
+                lines.append(f'{indent}self.driver.switch_to.window(self.driver.window_handles[-1])')
+            elif action == "scroll_to_top":
+                lines.append(f'{indent}self.driver.execute_script("window.scrollTo(0, 0);")')
+            elif action == "scroll_to_bottom":
+                lines.append(f'{indent}self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")')
+            elif action == "scroll_by":
+                lines.append(f'{indent}self.driver.execute_script("window.scrollBy({entry.get("x", 0)}, {entry.get("y", 300)});")')
+            elif action == "emulate_device":
+                lines.append(f'{indent}# Device emulation: {entry.get("device", "")} — set via ChromeOptions or CDP before driver init')
             else:
                 lines.append(f"{indent}# TODO: {entry}")
         if not lines:
@@ -426,6 +518,57 @@ public class {test_name} {{
             elif action == "execute_script":
                 script = entry.get("script", "").replace('"', '\\"')
                 lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("{script}");')
+            elif action == "send_keys":
+                key = entry.get("key", "").upper().replace("+", "_")
+                sel = entry.get("selector", "")
+                if sel:
+                    lines.append(f'{indent}wait.until(ExpectedConditions.presenceOfElementLocated({by_java})).sendKeys(Keys.{key});')
+                else:
+                    lines.append(f'{indent}new Actions(driver).sendKeys(Keys.{key}).perform();')
+            elif action == "accept_alert":
+                lines.append(f'{indent}wait.until(ExpectedConditions.alertIsPresent());')
+                lines.append(f'{indent}driver.switchTo().alert().accept();')
+            elif action == "dismiss_alert":
+                lines.append(f'{indent}wait.until(ExpectedConditions.alertIsPresent());')
+                lines.append(f'{indent}driver.switchTo().alert().dismiss();')
+            elif action == "type_in_alert":
+                text = entry.get("text", "")
+                lines.append(f'{indent}wait.until(ExpectedConditions.alertIsPresent());')
+                lines.append(f'{indent}driver.switchTo().alert().sendKeys("{text}");')
+                lines.append(f'{indent}driver.switchTo().alert().accept();')
+            elif action == "switch_to_frame":
+                if "index" in entry:
+                    lines.append(f'{indent}driver.switchTo().frame({entry["index"]});')
+                elif "name" in entry:
+                    lines.append(f'{indent}driver.switchTo().frame("{entry["name"]}");')
+                elif "selector" in entry:
+                    lines.append(f'{indent}driver.switchTo().frame(driver.findElement({by_java}));')
+            elif action == "switch_to_default_content":
+                lines.append(f'{indent}driver.switchTo().defaultContent();')
+            elif action == "upload_file":
+                path = entry.get("file_path", "").replace("\\", "\\\\")
+                lines.append(f'{indent}driver.findElement({by_java}).sendKeys("{path}");')
+            elif action == "set_cookie":
+                lines.append(f'{indent}driver.manage().addCookie(new Cookie("{entry["name"]}", "{entry["value"]}"));')
+            elif action == "set_local_storage":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.localStorage.setItem(\'{entry["key"]}\', \'{entry["value"]}\');");')
+            elif action == "set_session_storage":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.sessionStorage.setItem(\'{entry["key"]}\', \'{entry["value"]}\');");')
+            elif action == "open_new_tab":
+                url = entry.get("url", "")
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.open(\'{url}\');");')
+                lines.append(f'{indent}driver.switchTo().window(driver.getWindowHandles().toArray(new String[0])[driver.getWindowHandles().size() - 1]);')
+            elif action == "close_current_tab":
+                lines.append(f'{indent}driver.close();')
+                lines.append(f'{indent}driver.switchTo().window(driver.getWindowHandles().toArray(new String[0])[driver.getWindowHandles().size() - 1]);')
+            elif action == "scroll_to_top":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.scrollTo(0, 0);");')
+            elif action == "scroll_to_bottom":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");')
+            elif action == "scroll_by":
+                lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("window.scrollBy({entry.get("x", 0)}, {entry.get("y", 300)});");')
+            elif action == "emulate_device":
+                lines.append(f'{indent}// Device emulation: {entry.get("device", "")} — configure via ChromeOptions before driver init')
             else:
                 lines.append(f"{indent}// TODO: {entry}")
         if not lines:
@@ -983,3 +1126,298 @@ public class {test_name} {{
 
         body = f"\n\n".join(methods) if methods else f"{i}// No steps recorded"
         return header + body + "\n\n}"
+
+    # ------------------------------------------------------------------ #
+    #  C# NUnit codegen                                                    #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_csharp_nunit(self, args: dict) -> str:
+        log = self.browser._session_log
+        test_name = args.get("test_name", "RecordedFlowTests")
+        namespace = args.get("namespace", "SeleniumTests")
+        steps = self._log_to_csharp_steps(log)
+
+        return f'''using NUnit.Framework;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Interactions;
+using OpenQA.Selenium.Support.UI;
+using SeleniumExtras.WaitHelpers;
+using System;
+
+namespace {namespace}
+{{
+    [TestFixture]
+    public class {test_name}
+    {{
+        private IWebDriver driver;
+        private WebDriverWait wait;
+
+        [SetUp]
+        public void SetUp()
+        {{
+            var options = new ChromeOptions();
+            // options.AddArgument("--headless=new");
+            driver = new ChromeDriver(options);
+            driver.Manage().Window.Maximize();
+            wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+        }}
+
+        [TearDown]
+        public void TearDown()
+        {{
+            driver?.Quit();
+        }}
+
+        [Test]
+        public void RecordedFlowTest()
+        {{
+{steps}
+        }}
+    }}
+}}
+'''
+
+    def _log_to_csharp_steps(self, log: list) -> str:
+        lines = []
+        indent = "            "
+        for entry in log:
+            action = entry.get("action")
+            by = entry.get("by", "css")
+            sel = entry.get("selector", "")
+            by_cs = self._csharp_by(by, sel)
+
+            if action == "start_browser":
+                lines.append(f"{indent}// Browser started — handled in SetUp()")
+            elif action == "navigate":
+                lines.append(f'{indent}driver.Navigate().GoToUrl("{entry["url"]}");')
+            elif action == "click":
+                lines.append(f'{indent}wait.Until(ExpectedConditions.ElementToBeClickable({by_cs})).Click();')
+            elif action == "type_text":
+                text = entry.get("text", "")
+                lines.append(f'{indent}var field = wait.Until(ExpectedConditions.ElementIsVisible({by_cs}));')
+                lines.append(f'{indent}field.Clear();')
+                lines.append(f'{indent}field.SendKeys("{text}");')
+            elif action == "hover":
+                lines.append(f'{indent}new Actions(driver).MoveToElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))).Perform();')
+            elif action == "double_click":
+                lines.append(f'{indent}new Actions(driver).DoubleClick(wait.Until(ExpectedConditions.ElementToBeClickable({by_cs}))).Perform();')
+            elif action == "right_click":
+                lines.append(f'{indent}new Actions(driver).ContextClick(wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))).Perform();')
+            elif action == "select_option":
+                lines.append(f'{indent}var dropdown = new SelectElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs})));')
+                if "by_text" in entry:
+                    lines.append(f'{indent}dropdown.SelectByText("{entry["by_text"]}");')
+                elif "by_value" in entry:
+                    lines.append(f'{indent}dropdown.SelectByValue("{entry["by_value"]}");')
+                elif "by_index" in entry:
+                    lines.append(f'{indent}dropdown.SelectByIndex({entry["by_index"]});')
+            elif action == "scroll_to_element":
+                lines.append(f'{indent}((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView(true);", wait.Until(ExpectedConditions.ElementExists({by_cs})));')
+            elif action == "send_keys":
+                key = entry.get("key", "").replace("+", ".")
+                lines.append(f'{indent}new Actions(driver).SendKeys(Keys.{key.title()}).Perform();')
+            elif action == "accept_alert":
+                lines.append(f'{indent}wait.Until(ExpectedConditions.AlertIsPresent()).Accept();')
+            elif action == "dismiss_alert":
+                lines.append(f'{indent}wait.Until(ExpectedConditions.AlertIsPresent()).Dismiss();')
+            elif action == "type_in_alert":
+                lines.append(f'{indent}var alert = wait.Until(ExpectedConditions.AlertIsPresent());')
+                lines.append(f'{indent}alert.SendKeys("{entry.get("text", "")}");')
+                lines.append(f'{indent}alert.Accept();')
+            elif action == "switch_to_frame":
+                if "index" in entry:
+                    lines.append(f'{indent}driver.SwitchTo().Frame({entry["index"]});')
+                elif "name" in entry:
+                    lines.append(f'{indent}driver.SwitchTo().Frame("{entry["name"]}");')
+            elif action == "switch_to_default_content":
+                lines.append(f'{indent}driver.SwitchTo().DefaultContent();')
+            elif action == "upload_file":
+                path = entry.get("file_path", "").replace("\\", "\\\\")
+                lines.append(f'{indent}driver.FindElement({by_cs}).SendKeys("{path}");')
+            elif action == "set_cookie":
+                lines.append(f'{indent}driver.Manage().Cookies.AddCookie(new Cookie("{entry["name"]}", "{entry["value"]}"));')
+            elif action == "go_back":
+                lines.append(f'{indent}driver.Navigate().Back();')
+            elif action == "go_forward":
+                lines.append(f'{indent}driver.Navigate().Forward();')
+            elif action == "refresh":
+                lines.append(f'{indent}driver.Navigate().Refresh();')
+            elif action == "scroll_to_top":
+                lines.append(f'{indent}((IJavaScriptExecutor)driver).ExecuteScript("window.scrollTo(0, 0);");')
+            elif action == "scroll_to_bottom":
+                lines.append(f'{indent}((IJavaScriptExecutor)driver).ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");')
+            elif action == "open_new_tab":
+                url = entry.get("url", "")
+                lines.append(f'{indent}((IJavaScriptExecutor)driver).ExecuteScript("window.open(\'{url}\');");')
+                lines.append(f'{indent}driver.SwitchTo().Window(driver.WindowHandles[^1]);')
+            else:
+                lines.append(f"{indent}// TODO: {entry}")
+        if not lines:
+            lines.append(f"{indent}// No actions recorded")
+        return "\n".join(lines)
+
+    def _csharp_by(self, by: str, selector: str) -> str:
+        sel = selector.replace('"', '\\"')
+        return {
+            "css":          f'By.CssSelector("{sel}")',
+            "xpath":        f'By.XPath("{sel}")',
+            "id":           f'By.Id("{sel}")',
+            "name":         f'By.Name("{sel}")',
+            "tag":          f'By.TagName("{sel}")',
+            "class":        f'By.ClassName("{sel}")',
+            "link":         f'By.LinkText("{sel}")',
+            "partial_link": f'By.PartialLinkText("{sel}")',
+        }.get(by, f'By.CssSelector("{sel}")')
+
+    # ------------------------------------------------------------------ #
+    #  GitHub Actions YAML codegen                                         #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_github_actions(self, args: dict) -> str:
+        language = args.get("language", "java_maven")
+        java_ver = args.get("java_version", "17")
+
+        if language == "java_maven":
+            run_step = "- name: Run Selenium tests\n          run: mvn test -B"
+            setup = f"""      - name: Set up JDK {java_ver}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '{java_ver}'
+          distribution: 'temurin'
+          cache: maven"""
+        elif language == "java_gradle":
+            run_step = "- name: Run Selenium tests\n          run: ./gradlew test"
+            setup = f"""      - name: Set up JDK {java_ver}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '{java_ver}'
+          distribution: 'temurin'
+          cache: gradle"""
+        else:  # python_pytest
+            run_step = "- name: Run Selenium tests\n          run: pytest --tb=short -v"
+            setup = """      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt"""
+
+        return f'''name: Selenium Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+{setup}
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - {run_step}
+'''
+
+    # ------------------------------------------------------------------ #
+    #  Playwright hints codegen                                            #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_playwright_hints(self, args: dict) -> str:
+        log = self.browser._session_log
+        test_name = args.get("test_name", "recordedFlow")
+        steps = self._log_to_playwright_steps(log)
+
+        return f'''import {{ test, expect }} from "@playwright/test";
+
+test("{test_name}", async ({{ page }}) => {{
+{steps}
+}});
+'''
+
+    def _log_to_playwright_steps(self, log: list) -> str:
+        lines = []
+        indent = "  "
+        for entry in log:
+            action = entry.get("action")
+            sel = entry.get("selector", "")
+            loc = f'page.locator("{sel}")' if sel else ""
+
+            if action == "start_browser":
+                lines.append(f"{indent}// Browser handled by Playwright test runner")
+            elif action == "navigate":
+                lines.append(f'{indent}await page.goto("{entry["url"]}");')
+            elif action == "click":
+                lines.append(f'{indent}await page.locator("{sel}").click();')
+            elif action == "type_text":
+                lines.append(f'{indent}await page.locator("{sel}").fill("{entry.get("text", "")}");')
+            elif action == "get_text":
+                lines.append(f'{indent}const text = await page.locator("{sel}").textContent();')
+            elif action == "hover":
+                lines.append(f'{indent}await page.locator("{sel}").hover();')
+            elif action == "double_click":
+                lines.append(f'{indent}await page.locator("{sel}").dblclick();')
+            elif action == "right_click":
+                lines.append(f'{indent}await page.locator("{sel}").click({{ button: "right" }});')
+            elif action == "scroll_to_element":
+                lines.append(f'{indent}await page.locator("{sel}").scrollIntoViewIfNeeded();')
+            elif action == "select_option":
+                if "by_text" in entry:
+                    lines.append(f'{indent}await page.locator("{sel}").selectOption({{ label: "{entry["by_text"]}" }});')
+                elif "by_value" in entry:
+                    lines.append(f'{indent}await page.locator("{sel}").selectOption("{entry["by_value"]}");')
+                elif "by_index" in entry:
+                    lines.append(f'{indent}await page.locator("{sel}").selectOption({{ index: {entry["by_index"]} }});')
+            elif action == "send_keys":
+                key = entry.get("key", "").replace("ctrl+", "Control+").replace("shift+", "Shift+")
+                lines.append(f'{indent}await page.keyboard.press("{key}");')
+            elif action == "upload_file":
+                lines.append(f'{indent}await page.locator("{sel}").setInputFiles("{entry.get("file_path", "")}");')
+            elif action == "accept_alert":
+                lines.append(f'{indent}page.on("dialog", dialog => dialog.accept());')
+            elif action == "dismiss_alert":
+                lines.append(f'{indent}page.on("dialog", dialog => dialog.dismiss());')
+            elif action == "type_in_alert":
+                lines.append(f'{indent}page.on("dialog", async dialog => {{ await dialog.accept("{entry.get("text", "")}"); }});')
+            elif action == "switch_to_frame":
+                sel_f = entry.get("selector", entry.get("name", str(entry.get("index", ""))))
+                lines.append(f'{indent}const frame = page.frameLocator("{sel_f}");')
+            elif action == "switch_to_default_content":
+                lines.append(f'{indent}// Playwright does not need explicit default content switch')
+            elif action == "go_back":
+                lines.append(f'{indent}await page.goBack();')
+            elif action == "go_forward":
+                lines.append(f'{indent}await page.goForward();')
+            elif action == "refresh":
+                lines.append(f'{indent}await page.reload();')
+            elif action == "open_new_tab":
+                url = entry.get("url", "")
+                lines.append(f'{indent}const newPage = await context.newPage();')
+                if url:
+                    lines.append(f'{indent}await newPage.goto("{url}");')
+            elif action == "scroll_to_top":
+                lines.append(f'{indent}await page.evaluate(() => window.scrollTo(0, 0));')
+            elif action == "scroll_to_bottom":
+                lines.append(f'{indent}await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));')
+            elif action == "scroll_by":
+                lines.append(f'{indent}await page.evaluate(() => window.scrollBy({entry.get("x", 0)}, {entry.get("y", 300)}));')
+            elif action == "set_cookie":
+                lines.append(f'{indent}await context.addCookies([{{ name: "{entry["name"]}", value: "{entry["value"]}", url: page.url() }}]);')
+            elif action == "set_local_storage":
+                lines.append(f'{indent}await page.evaluate(() => localStorage.setItem("{entry["key"]}", "{entry["value"]}"));')
+            elif action == "execute_script":
+                script = entry.get("script", "").replace('"', '\\"')
+                lines.append(f'{indent}await page.evaluate(() => {{{entry.get("script", "")}}});')
+            else:
+                lines.append(f"{indent}// TODO: {entry}")
+        if not lines:
+            lines.append(f"{indent}// No actions recorded")
+        return "\n".join(lines)
