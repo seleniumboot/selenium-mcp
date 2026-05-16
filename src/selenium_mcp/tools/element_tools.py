@@ -1,11 +1,14 @@
 """
 Element Tools — find, click, type, select, hover, drag-and-drop, waits
+Includes self-healing locators: when a primary selector fails, alternative
+strategies are tried automatically and the successful one is cached.
 """
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from mcp.types import Tool
 from selenium_mcp.tools._locators import BY_MAP
 
@@ -31,21 +34,143 @@ LOCATOR_SCHEMA = {
 class ElementTools:
     def __init__(self, browser_tools):
         self.browser = browser_tools
+        self._last_heal: tuple[str, str, str, str] | None = None  # (orig_sel, orig_by, new_sel, new_by)
 
     def _by(self, strategy: str):
         return BY_MAP.get(strategy, By.CSS_SELECTOR)
 
-    def _find(self, selector, by="css", timeout=10):
+    # ------------------------------------------------------------------ #
+    #  Self-healing core                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _alternatives(self, selector: str, by: str) -> list[tuple[str, str]]:
+        """Generate alternative (selector, by) pairs to try when primary fails."""
+        alts: list[tuple[str, str]] = []
+
+        if by == "css":
+            # Multi-selector fallback: split on top-level commas
+            parts = [p.strip() for p in selector.split(",") if p.strip()]
+            if len(parts) > 1:
+                alts.extend((p, "css") for p in parts)
+
+            # #id → by ID
+            if selector.startswith("#") and " " not in selector:
+                alts.append((selector[1:], "id"))
+
+            # .class → by class name (simple single class only)
+            if selector.startswith(".") and " " not in selector and "." not in selector[1:]:
+                cls = selector[1:]
+                alts.append((cls, "class"))
+                alts.append((f"[class*='{cls}']", "css"))
+
+            # tag[attr='val'] → XPath
+            if "[" in selector and not selector.startswith("["):
+                tag = selector.split("[")[0]
+                rest = selector[len(tag):]
+                xpath = f"//{tag}{rest.replace('[', '[@').replace('=', '=').replace(']', ']')}"
+                alts.append((xpath, "xpath"))
+
+            # Strip CSS pseudo-classes/elements like :not(...), :first-child, ::before
+            import re
+            stripped = re.sub(r':{1,2}[\w-]+(\([^)]*\))?', '', selector).strip()
+            if stripped and stripped != selector:
+                alts.append((stripped, "css"))
+
+            # Try XPath contains on text if it looks like a label
+            if not any(c in selector for c in ("#", ".", "[", ":")):
+                alts.append((f"//*[contains(text(),'{selector}')]", "xpath"))
+
+        elif by == "xpath":
+            # Try without axis prefix variations
+            if selector.startswith("//"):
+                alts.append((selector.lstrip("/"), "xpath"))
+            # Try CSS conversion for simple tag[@attr] xpaths
+            import re
+            m = re.match(r'^//(\w+)\[@(\w+)=[\'"]([^\'"]+)[\'"]\]$', selector)
+            if m:
+                tag, attr, val = m.groups()
+                alts.append((f"{tag}[{attr}='{val}']", "css"))
+                if attr == "id":
+                    alts.append((val, "id"))
+                elif attr == "name":
+                    alts.append((val, "name"))
+
+        elif by == "id":
+            alts.append((f"#{selector}", "css"))
+            alts.append((f"[id='{selector}']", "css"))
+            alts.append((f"//*[@id='{selector}']", "xpath"))
+
+        elif by == "name":
+            alts.append((f"[name='{selector}']", "css"))
+            alts.append((f"//*[@name='{selector}']", "xpath"))
+
+        return alts
+
+    def _locate(self, selector: str, by: str, timeout: int, condition_fn=None):
+        """
+        Find an element using primary selector, falling back to alternatives.
+        Caches successful healed selectors via browser._healer_cache.
+        Sets self._last_heal when a fallback was used.
+        """
+        self._last_heal = None
         driver = self.browser.get_driver()
-        return WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((self._by(by), selector))
-        )
+        cache_key = (selector, by)
+
+        # Check if we already have a healed locator for this selector
+        if cache_key in self.browser._healer_cache:
+            healed_sel, healed_by = self.browser._healer_cache[cache_key]
+            by_val = self._by(healed_by)
+            cond = condition_fn or EC.presence_of_element_located
+            try:
+                el = WebDriverWait(driver, timeout).until(cond((by_val, healed_sel)))
+                self._last_heal = (selector, by, healed_sel, healed_by)
+                return el
+            except (TimeoutException, NoSuchElementException):
+                # Cached heal no longer works — invalidate and retry fresh
+                del self.browser._healer_cache[cache_key]
+
+        # Try primary
+        by_val = self._by(by)
+        cond = condition_fn or EC.presence_of_element_located
+        original_exc = None
+        try:
+            return WebDriverWait(driver, timeout).until(cond((by_val, selector)))
+        except (TimeoutException, NoSuchElementException) as e:
+            original_exc = e
+
+        # Primary failed — try alternatives with a short timeout
+        for alt_sel, alt_by in self._alternatives(selector, by):
+            try:
+                alt_by_val = self._by(alt_by)
+                el = WebDriverWait(driver, 3).until(cond((alt_by_val, alt_sel)))
+                # Cache the successful alternative
+                self.browser._healer_cache[cache_key] = (alt_sel, alt_by)
+                self._last_heal = (selector, by, alt_sel, alt_by)
+                return el
+            except (TimeoutException, NoSuchElementException):
+                continue
+
+        raise original_exc
+
+    def _heal_note(self) -> str:
+        if self._last_heal:
+            orig_sel, orig_by, new_sel, new_by = self._last_heal
+            return f" [⚕ healed: '{orig_sel}' ({orig_by}) → '{new_sel}' ({new_by})]"
+        return ""
+
+    # ------------------------------------------------------------------ #
+    #  Legacy helpers kept for drag_and_drop (needs two separate locates)  #
+    # ------------------------------------------------------------------ #
+
+    def _find(self, selector, by="css", timeout=10):
+        return self._locate(selector, by, timeout, EC.presence_of_element_located)
 
     def _find_clickable(self, selector, by="css", timeout=10):
-        driver = self.browser.get_driver()
-        return WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((self._by(by), selector))
-        )
+        return self._locate(selector, by, timeout, EC.element_to_be_clickable)
+
+    # ------------------------------------------------------------------ #
+    #  MCP tool definitions                                                #
+    # ------------------------------------------------------------------ #
 
     def get_tools(self) -> list[Tool]:
         return [
@@ -216,34 +341,47 @@ class ElementTools:
                     "required": ["selector"],
                 },
             ),
+            Tool(
+                name="get_healed_locators",
+                description="Return all self-healed locator mappings from this session. Shows which selectors were automatically repaired and what they were replaced with.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="clear_healed_locators",
+                description="Clear the self-healing locator cache so all selectors are re-evaluated from scratch.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
         ]
 
     def get_handlers(self) -> dict:
         return {
-            "find_element":    self._find_element,
-            "find_elements":   self._find_elements,
-            "click":           self._click,
-            "type_text":       self._type_text,
-            "get_text":        self._get_text,
-            "get_attribute":   self._get_attribute,
-            "select_option":   self._select_option,
-            "hover":           self._hover,
-            "double_click":    self._double_click,
-            "right_click":     self._right_click,
-            "drag_and_drop":   self._drag_and_drop,
-            "is_displayed":    self._is_displayed,
-            "is_enabled":      self._is_enabled,
-            "wait_for_element":self._wait_for_element,
-            "scroll_to_element":self._scroll_to_element,
-            "clear_field":     self._clear_field,
+            "find_element":         self._find_element,
+            "find_elements":        self._find_elements,
+            "click":                self._click,
+            "type_text":            self._type_text,
+            "get_text":             self._get_text,
+            "get_attribute":        self._get_attribute,
+            "select_option":        self._select_option,
+            "hover":                self._hover,
+            "double_click":         self._double_click,
+            "right_click":          self._right_click,
+            "drag_and_drop":        self._drag_and_drop,
+            "is_displayed":         self._is_displayed,
+            "is_enabled":           self._is_enabled,
+            "wait_for_element":     self._wait_for_element,
+            "scroll_to_element":    self._scroll_to_element,
+            "clear_field":          self._clear_field,
+            "get_healed_locators":  self._get_healed_locators,
+            "clear_healed_locators":self._clear_healed_locators,
         }
 
     # ------------------------------------------------------------------ #
     #  Handlers                                                            #
     # ------------------------------------------------------------------ #
+
     async def _find_element(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
-        return f"tag={el.tag_name} | text='{el.text}' | displayed={el.is_displayed()}"
+        return f"tag={el.tag_name} | text='{el.text}' | displayed={el.is_displayed()}{self._heal_note()}"
 
     async def _find_elements(self, args: dict) -> str:
         driver = self.browser.get_driver()
@@ -255,7 +393,7 @@ class ElementTools:
         el = self._find_clickable(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         el.click()
         self.browser.record("click", selector=args["selector"], by=args.get("by", "css"))
-        return f"✅ Clicked '{args['selector']}'"
+        return f"✅ Clicked '{args['selector']}'{self._heal_note()}"
 
     async def _type_text(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
@@ -265,51 +403,54 @@ class ElementTools:
         sel_lower = args["selector"].lower()
         logged_text = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else args["text"]
         self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text)
-        return f"✅ Typed into '{args['selector']}'"
+        return f"✅ Typed into '{args['selector']}'{self._heal_note()}"
 
     async def _get_text(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
-        return el.text
+        note = self._heal_note()
+        return el.text + note if note else el.text
 
     async def _get_attribute(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         val = el.get_attribute(args["attribute"])
-        return str(val)
+        note = self._heal_note()
+        return str(val) + note if note else str(val)
 
     async def _select_option(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         sel = Select(el)
+        note = self._heal_note()
         if "by_text" in args:
             sel.select_by_visible_text(args["by_text"])
             self.browser.record("select_option", selector=args["selector"], by_text=args["by_text"])
-            return f"✅ Selected by text: '{args['by_text']}'"
+            return f"✅ Selected by text: '{args['by_text']}'{note}"
         elif "by_value" in args:
             sel.select_by_value(args["by_value"])
             self.browser.record("select_option", selector=args["selector"], by_value=args["by_value"])
-            return f"✅ Selected by value: '{args['by_value']}'"
+            return f"✅ Selected by value: '{args['by_value']}'{note}"
         elif "by_index" in args:
             sel.select_by_index(args["by_index"])
             self.browser.record("select_option", selector=args["selector"], by_index=args["by_index"])
-            return f"✅ Selected by index: {args['by_index']}"
+            return f"✅ Selected by index: {args['by_index']}{note}"
         return "❌ Provide by_text, by_value, or by_index"
 
     async def _hover(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).move_to_element(el).perform()
         self.browser.record("hover", selector=args["selector"], by=args.get("by", "css"))
-        return f"✅ Hovered over '{args['selector']}'"
+        return f"✅ Hovered over '{args['selector']}'{self._heal_note()}"
 
     async def _double_click(self, args: dict) -> str:
         el = self._find_clickable(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).double_click(el).perform()
         self.browser.record("double_click", selector=args["selector"], by=args.get("by", "css"))
-        return f"✅ Double-clicked '{args['selector']}'"
+        return f"✅ Double-clicked '{args['selector']}'{self._heal_note()}"
 
     async def _right_click(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         ActionChains(self.browser.get_driver()).context_click(el).perform()
         self.browser.record("right_click", selector=args["selector"], by=args.get("by", "css"))
-        return f"✅ Right-clicked '{args['selector']}'"
+        return f"✅ Right-clicked '{args['selector']}'{self._heal_note()}"
 
     async def _drag_and_drop(self, args: dict) -> str:
         by = self._by(args.get("by", "css"))
@@ -322,11 +463,11 @@ class ElementTools:
 
     async def _is_displayed(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
-        return str(el.is_displayed())
+        return str(el.is_displayed()) + self._heal_note()
 
     async def _is_enabled(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
-        return str(el.is_enabled())
+        return str(el.is_enabled()) + self._heal_note()
 
     async def _wait_for_element(self, args: dict) -> str:
         driver = self.browser.get_driver()
@@ -348,9 +489,23 @@ class ElementTools:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         self.browser.get_driver().execute_script("arguments[0].scrollIntoView(true);", el)
         self.browser.record("scroll_to_element", selector=args["selector"], by=args.get("by", "css"))
-        return f"✅ Scrolled to '{args['selector']}'"
+        return f"✅ Scrolled to '{args['selector']}'{self._heal_note()}"
 
     async def _clear_field(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         el.clear()
-        return f"✅ Cleared '{args['selector']}'"
+        return f"✅ Cleared '{args['selector']}'{self._heal_note()}"
+
+    async def _get_healed_locators(self, args: dict) -> str:
+        cache = self.browser._healer_cache
+        if not cache:
+            return "No healed locators in this session."
+        lines = ["Healed locators this session:"]
+        for (orig_sel, orig_by), (new_sel, new_by) in cache.items():
+            lines.append(f"  [{orig_by}] '{orig_sel}'  →  [{new_by}] '{new_sel}'")
+        return "\n".join(lines)
+
+    async def _clear_healed_locators(self, args: dict) -> str:
+        count = len(self.browser._healer_cache)
+        self.browser._healer_cache.clear()
+        return f"✅ Cleared {count} healed locator(s) from cache."

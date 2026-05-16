@@ -13,6 +13,7 @@ class BrowserTools:
     def __init__(self):
         self.driver = None
         self._session_log = []  # records all actions for codegen
+        self._healer_cache: dict[str, tuple[str, str]] = {}  # (selector,by) → (healed_selector,healed_by)
 
     # ------------------------------------------------------------------ #
     #  Session helpers                                                     #

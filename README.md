@@ -3,7 +3,7 @@
 A Python **Model Context Protocol (MCP)** server for Selenium WebDriver automation.
 Let Claude or GitHub Copilot control a real browser — navigate pages, interact with elements,
 run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / pytest** test code from recorded sessions.
-43 tools. No ChromeDriver setup. Browser auto-starts on first use.
+45 tools. No ChromeDriver setup. Browser auto-starts on first use.
 
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
@@ -85,7 +85,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (43 total)
+## Tools (45 total)
 
 ### Browser
 | Tool | Description |
@@ -121,6 +121,8 @@ Claude controls the real browser, records every action, and on request generates
 | `wait_for_element` | Wait: visible / clickable / present / invisible |
 | `scroll_to_element` | Scroll element into view |
 | `clear_field` | Clear input field |
+| `get_healed_locators` | View all self-healed selector mappings for the session |
+| `clear_healed_locators` | Reset the self-healing cache |
 
 ### Assertions
 | Tool | Description |
@@ -228,6 +230,22 @@ public class LoginSteps {
 
 ---
 
+## Self-Healing Locators
+
+When a selector fails to find an element, seleniumboot-mcp automatically tries alternative strategies before giving up:
+
+| Primary selector | Alternatives tried |
+|---|---|
+| `#my-id` (CSS) | `by=id "my-id"`, `[id='my-id']` |
+| `.my-class` (CSS) | `by=class "my-class"`, `[class*='my-class']` |
+| `input[type='email']` (CSS) | `//input[@type='email']` (XPath) |
+| `//button[@id='ok']` (XPath) | `button[id='ok']` (CSS), `by=id "ok"` |
+| `"A, B"` comma list | tries A first, then B |
+
+Successful fallbacks are **cached** so the healed selector is reused automatically. Use `get_healed_locators` to inspect the cache and update your test code, and `clear_healed_locators` to start fresh.
+
+---
+
 ## Links
 
 - **GitHub:** [github.com/seleniumboot/selenium-mcp](https://github.com/seleniumboot/selenium-mcp)
@@ -244,8 +262,8 @@ public class LoginSteps {
 - [x] Auto-start browser on first use (no explicit `start_browser` needed)
 - [x] Page Object Model generation (`generate_java_page_object`)
 - [x] Cucumber / Gherkin step generation (`generate_gherkin`)
+- [x] Self-healing locators — automatic fallback when a selector breaks
 - [ ] CI/CD config generator (GitHub Actions, Jenkins)
-- [ ] Self-healing locators
 
 ---
 
