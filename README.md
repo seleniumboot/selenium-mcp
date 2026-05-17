@@ -11,6 +11,12 @@ run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / p
 
 ---
 
+## Demo
+
+[![seleniumboot-mcp demo](https://img.youtube.com/vi/54LoY2HNLrs/maxresdefault.jpg)](https://youtu.be/54LoY2HNLrs)
+
+---
+
 ## Installation
 
 ```bash
