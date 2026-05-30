@@ -120,7 +120,7 @@ class BrowserTools:
                     "type": "object",
                     "properties": {
                         "script": {"type": "string"},
-                        "args":   {"type": "array", "default": []},
+                        "args":   {"type": "array", "items": {}, "default": []},
                     },
                     "required": ["script"],
                 },

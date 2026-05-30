@@ -8,6 +8,7 @@ run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / p
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/RazaTech.seleniumboot-mcp?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)
 
 ---
 
@@ -29,9 +30,20 @@ pip install seleniumboot-mcp
 
 ## Setup
 
-### VS Code (Claude / Copilot)
+### VS Code — Marketplace Extension (easiest)
 
-Add `.vscode/mcp.json` to your project root:
+Install **[Seleniumboot MCP](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)** from the VS Code Marketplace.
+
+The extension automatically:
+- Registers the MCP server with **GitHub Copilot** (no config file needed)
+- Creates a `.mcp.json` in your project so **Claude Code** detects it on next open
+- Prompts to `pip install seleniumboot-mcp` if the Python package is missing
+
+When Claude Code asks *"Allow MCP server seleniumboot?"* — click **Allow**.
+
+### VS Code — Manual
+
+Add `.vscode/mcp.json` to your project root (for GitHub Copilot):
 
 ```json
 {
@@ -44,7 +56,20 @@ Add `.vscode/mcp.json` to your project root:
 }
 ```
 
-Open the project in VS Code → click the **Start** button that appears above the config → done.
+For Claude Code, add `.mcp.json` to your project root:
+
+```json
+{
+  "mcpServers": {
+    "seleniumboot": {
+      "command": "seleniumboot-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Open the project in VS Code → Claude Code will prompt to approve the server → done.
 
 ### Claude Desktop
 
@@ -288,6 +313,7 @@ Successful fallbacks are **cached** so the healed selector is reused automatical
 
 - **GitHub:** [github.com/seleniumboot/selenium-mcp](https://github.com/seleniumboot/selenium-mcp)
 - **PyPI:** [pypi.org/project/seleniumboot-mcp](https://pypi.org/project/seleniumboot-mcp/)
+- **VS Code Marketplace:** [marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)
 
 ---
 

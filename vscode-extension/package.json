@@ -1,0 +1,73 @@
+{
+  "name": "seleniumboot-mcp",
+  "displayName": "Seleniumboot MCP — Selenium Browser Automation",
+  "description": "MCP server for Selenium WebDriver automation. Lets GitHub Copilot and Claude control a real browser — 82 tools for navigation, interaction, assertions, and test codegen.",
+  "version": "0.3.6",
+  "publisher": "RazaTech",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "AI",
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "selenium",
+    "browser automation",
+    "testing",
+    "copilot",
+    "claude",
+    "webdriver",
+    "testng",
+    "playwright"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seleniumboot/selenium-mcp"
+  },
+  "homepage": "https://github.com/seleniumboot/selenium-mcp",
+  "bugs": {
+    "url": "https://github.com/seleniumboot/selenium-mcp/issues"
+  },
+  "license": "MIT",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "mcpServers": {
+      "selenium": {
+        "label": "Seleniumboot MCP",
+        "type": "stdio",
+        "command": "seleniumboot-mcp"
+      }
+    },
+    "commands": [
+      {
+        "command": "seleniumboot-mcp.install",
+        "title": "Seleniumboot MCP: Install (pip install seleniumboot-mcp)"
+      },
+      {
+        "command": "seleniumboot-mcp.upgrade",
+        "title": "Seleniumboot MCP: Upgrade to latest"
+      },
+      {
+        "command": "seleniumboot-mcp.checkStatus",
+        "title": "Seleniumboot MCP: Check installation status"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.99.0",
+    "typescript": "^5.4.0"
+  }
+}
