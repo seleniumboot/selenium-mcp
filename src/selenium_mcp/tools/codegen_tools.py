@@ -138,6 +138,36 @@ class CodegenTools:
                 },
             ),
             Tool(
+                name="generate_jenkins_pipeline",
+                description="Generate a declarative Jenkinsfile for running the recorded test session (Maven, Gradle, or pytest).",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "language": {
+                            "type": "string",
+                            "enum": ["java_maven", "java_gradle", "python_pytest"],
+                            "default": "java_maven",
+                        },
+                        "java_version": {"type": "string", "default": "17"},
+                    },
+                },
+            ),
+            Tool(
+                name="generate_gitlab_ci",
+                description="Generate a .gitlab-ci.yml pipeline for running the recorded test session (Maven, Gradle, or pytest).",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "language": {
+                            "type": "string",
+                            "enum": ["java_maven", "java_gradle", "python_pytest"],
+                            "default": "java_maven",
+                        },
+                        "java_version": {"type": "string", "default": "17"},
+                    },
+                },
+            ),
+            Tool(
                 name="generate_playwright_hints",
                 description="Generate equivalent Playwright (TypeScript) code hints from the recorded browser session.",
                 inputSchema={
@@ -186,6 +216,8 @@ class CodegenTools:
             "generate_gherkin":           self._generate_gherkin,
             "generate_csharp_nunit":      self._generate_csharp_nunit,
             "generate_github_actions":    self._generate_github_actions,
+            "generate_jenkins_pipeline":  self._generate_jenkins_pipeline,
+            "generate_gitlab_ci":         self._generate_gitlab_ci,
             "generate_playwright_hints":  self._generate_playwright_hints,
         }
 
@@ -1325,6 +1357,126 @@ jobs:
         uses: browser-actions/setup-chrome@v1
 
       - {run_step}
+'''
+
+    # ------------------------------------------------------------------ #
+    #  Jenkins pipeline codegen                                            #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_jenkins_pipeline(self, args: dict) -> str:
+        language = args.get("language", "java_maven")
+        java_ver = args.get("java_version", "17")
+
+        chrome_install = (
+            "sh 'apt-get update && apt-get install -y wget gnupg && "
+            "wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && "
+            "echo \"deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main\" "
+            "| tee /etc/apt/sources.list.d/google-chrome.list && "
+            "apt-get update && apt-get install -y google-chrome-stable'"
+        )
+
+        if language == "java_maven":
+            tools_block = f"""    tools {{
+        jdk 'jdk{java_ver}'
+        maven '3.9'
+    }}"""
+            test_stage = "sh 'mvn test -B'"
+            reports = "junit '**/target/surefire-reports/*.xml'"
+        elif language == "java_gradle":
+            tools_block = f"""    tools {{
+        jdk 'jdk{java_ver}'
+    }}"""
+            test_stage = "sh './gradlew test'"
+            reports = "junit '**/build/test-results/test/*.xml'"
+        else:  # python_pytest
+            tools_block = ""
+            test_stage = (
+                "sh 'python3 -m venv .venv && . .venv/bin/activate && "
+                "pip install -r requirements.txt && "
+                "pytest --tb=short -v --junitxml=report.xml'"
+            )
+            reports = "junit 'report.xml'"
+
+        tools_section = f"\n{tools_block}\n" if tools_block else ""
+
+        return f'''pipeline {{
+    agent any
+{tools_section}
+    stages {{
+        stage('Checkout') {{
+            steps {{
+                checkout scm
+            }}
+        }}
+
+        stage('Install Chrome') {{
+            steps {{
+                {chrome_install}
+            }}
+        }}
+
+        stage('Run Selenium Tests') {{
+            steps {{
+                {test_stage}
+            }}
+        }}
+    }}
+
+    post {{
+        always {{
+            {reports}
+        }}
+    }}
+}}
+'''
+
+    # ------------------------------------------------------------------ #
+    #  GitLab CI codegen                                                   #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_gitlab_ci(self, args: dict) -> str:
+        language = args.get("language", "java_maven")
+        java_ver = args.get("java_version", "17")
+
+        chrome_setup = """    - apt-get update && apt-get install -y wget gnupg
+    - wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+    - echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+    - apt-get update && apt-get install -y google-chrome-stable"""
+
+        if language == "java_maven":
+            image = f"maven:3.9-eclipse-temurin-{java_ver}"
+            script = "    - mvn test -B"
+            artifacts = """  artifacts:
+    when: always
+    reports:
+      junit: target/surefire-reports/*.xml"""
+        elif language == "java_gradle":
+            image = f"gradle:8-jdk{java_ver}"
+            script = "    - ./gradlew test"
+            artifacts = """  artifacts:
+    when: always
+    reports:
+      junit: build/test-results/test/*.xml"""
+        else:  # python_pytest
+            image = "python:3.12"
+            chrome_setup += "\n    - pip install -r requirements.txt"
+            script = "    - pytest --tb=short -v --junitxml=report.xml"
+            artifacts = """  artifacts:
+    when: always
+    reports:
+      junit: report.xml"""
+
+        return f'''stages:
+  - test
+
+selenium-tests:
+  stage: test
+  image: {image}
+  before_script:
+{chrome_setup}
+  script:
+{script}
+{artifacts}
 '''
 
     # ------------------------------------------------------------------ #

@@ -116,7 +116,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (82 total)
+## Tools (84 total)
 
 ### Browser
 | Tool | Description |
@@ -206,6 +206,8 @@ Claude controls the real browser, records every action, and on request generates
 | `generate_python_test` | pytest class from session |
 | `generate_csharp_nunit` | C# NUnit + Selenium test class from session |
 | `generate_github_actions` | GitHub Actions CI workflow YAML (Maven / Gradle / pytest) |
+| `generate_jenkins_pipeline` | Declarative Jenkinsfile (Maven / Gradle / pytest) |
+| `generate_gitlab_ci` | GitLab CI `.gitlab-ci.yml` pipeline (Maven / Gradle / pytest) |
 | `generate_playwright_hints` | Equivalent Playwright TypeScript code from session |
 | `get_session_log` | View recorded actions |
 | `clear_session_log` | Reset the session recording |
@@ -338,7 +340,7 @@ Successful fallbacks are **cached** so the healed selector is reused automatical
 - [x] C# NUnit + Selenium codegen
 - [x] GitHub Actions CI workflow generator (Maven / Gradle / pytest)
 - [x] Playwright TypeScript migration hints
-- [ ] CI/CD config for Jenkins / GitLab CI
+- [x] CI/CD config for Jenkins / GitLab CI
 
 ---
 
