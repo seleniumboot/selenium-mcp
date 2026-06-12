@@ -1,5 +1,3 @@
-# Requires a PyPI "Trusted Publisher" configured for this repo/workflow:
-# https://pypi.org/manage/project/seleniumboot-mcp/settings/publishing/
 name: Publish to PyPI
 
 on:
@@ -34,9 +32,6 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -44,3 +39,5 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
