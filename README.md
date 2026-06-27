@@ -8,7 +8,7 @@ run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / p
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/RazaTech.seleniumboot-mcp?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/seleniumboot.selenium-boot-mcp?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=seleniumboot.selenium-boot-mcp)
 
 ---
 
@@ -32,7 +32,7 @@ pip install seleniumboot-mcp
 
 ### VS Code — Marketplace Extension (easiest)
 
-Install **[Seleniumboot MCP](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)** from the VS Code Marketplace.
+Install **[Selenium Boot MCP](https://marketplace.visualstudio.com/items?itemName=seleniumboot.selenium-boot-mcp)** from the VS Code Marketplace.
 
 The extension automatically:
 - Registers the MCP server with **GitHub Copilot** (no config file needed)
@@ -315,7 +315,7 @@ Successful fallbacks are **cached** so the healed selector is reused automatical
 
 - **GitHub:** [github.com/seleniumboot/selenium-mcp](https://github.com/seleniumboot/selenium-mcp)
 - **PyPI:** [pypi.org/project/seleniumboot-mcp](https://pypi.org/project/seleniumboot-mcp/)
-- **VS Code Marketplace:** [marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=RazaTech.seleniumboot-mcp)
+- **VS Code Marketplace:** [marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=seleniumboot.selenium-boot-mcp)
 
 ---
 
