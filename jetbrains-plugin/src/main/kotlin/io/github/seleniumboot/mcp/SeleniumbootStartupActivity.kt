@@ -1,22 +1,20 @@
-package tech.raza.seleniumboot
+package io.github.seleniumboot.mcp
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.startup.ProjectActivity
 
-private const val NOTIFICATION_GROUP = "Seleniumboot MCP"
+class SeleniumbootStartupActivity : ProjectActivity {
 
-class SeleniumbootStartupActivity : StartupActivity.Background {
-
-    override fun runActivity(project: Project) {
+    override suspend fun execute(project: Project) {
         val installed = InstallChecker.isInstalled()
 
         if (!installed) {
             showNotification(
                 project,
-                "Seleniumboot MCP: <b>seleniumboot-mcp</b> is not installed. " +
-                "Go to <b>Tools → Seleniumboot MCP → Install / Upgrade</b> to set it up.",
+                "Selenium Boot MCP: <b>seleniumboot-mcp</b> is not installed. " +
+                "Go to <b>Tools → Selenium Boot MCP → Install / Upgrade</b> to set it up.",
                 NotificationType.WARNING
             )
             return
@@ -29,15 +27,15 @@ class SeleniumbootStartupActivity : StartupActivity.Background {
             if (registered) {
                 showNotification(
                     project,
-                    "Seleniumboot MCP registered with AI Assistant. " +
+                    "Selenium Boot MCP registered with AI Assistant. " +
                     "<b>Restart the IDE</b> to activate.",
                     NotificationType.INFORMATION
                 )
             } else {
                 showNotification(
                     project,
-                    "Seleniumboot MCP is installed but could not be auto-registered. " +
-                    "Go to <b>Tools → Seleniumboot MCP → Register MCP Server</b> or add it manually " +
+                    "Selenium Boot MCP is installed but could not be auto-registered. " +
+                    "Go to <b>Tools → Selenium Boot MCP → Register MCP Server</b> or add it manually " +
                     "in <i>Settings → Tools → AI Assistant → MCP Servers</i>.",
                     NotificationType.WARNING
                 )
@@ -48,7 +46,7 @@ class SeleniumbootStartupActivity : StartupActivity.Background {
     private fun showNotification(project: Project, content: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP)
-            ?.createNotification("Seleniumboot MCP", content, type)
+            ?.createNotification("Selenium Boot MCP", content, type)
             ?.notify(project)
     }
 }

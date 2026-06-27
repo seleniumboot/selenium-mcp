@@ -50,6 +50,8 @@ Thumbs.db
 htmlreport/
 reports/
 *.xml
+# but keep the JetBrains plugin descriptor (required to build/publish the plugin)
+!jetbrains-plugin/src/main/resources/META-INF/plugin.xml
 
 # Coverage
 .coverage

@@ -1,4 +1,4 @@
-package tech.raza.seleniumboot
+package io.github.seleniumboot.mcp
 
 import com.intellij.openapi.application.PathManager
 import org.w3c.dom.Document

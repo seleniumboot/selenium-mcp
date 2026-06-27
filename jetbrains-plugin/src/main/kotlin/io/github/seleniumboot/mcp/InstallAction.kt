@@ -1,4 +1,4 @@
-package tech.raza.seleniumboot
+package io.github.seleniumboot.mcp
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 
 private const val INSTALL_CMD = "pip install --upgrade seleniumboot-mcp"
+internal const val NOTIFICATION_GROUP = "Selenium Boot MCP"
 
 class InstallAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
@@ -66,7 +67,7 @@ private fun runPipCommand(project: Project, command: String) {
 
 private fun notify(project: Project, content: String, type: NotificationType) {
     NotificationGroupManager.getInstance()
-        .getNotificationGroup("Seleniumboot MCP")
-        ?.createNotification("Seleniumboot MCP", content, type)
+        .getNotificationGroup(NOTIFICATION_GROUP)
+        ?.createNotification("Selenium Boot MCP", content, type)
         ?.notify(project)
 }

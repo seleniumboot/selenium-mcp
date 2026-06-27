@@ -1,4 +1,4 @@
-package tech.raza.seleniumboot
+package io.github.seleniumboot.mcp
 
 object InstallChecker {
 

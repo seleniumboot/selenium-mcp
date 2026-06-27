@@ -9,6 +9,8 @@ run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / p
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/seleniumboot.selenium-boot-mcp?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=seleniumboot.selenium-boot-mcp)
+[![JetBrains Plugin](https://img.shields.io/jetbrains/plugin/v/32516?label=JetBrains)](https://plugins.jetbrains.com/plugin/32516)
+[![JetBrains Downloads](https://img.shields.io/jetbrains/plugin/d/32516?label=downloads)](https://plugins.jetbrains.com/plugin/32516)
 
 ---
 
@@ -40,6 +42,15 @@ The extension automatically:
 - Prompts to `pip install seleniumboot-mcp` if the Python package is missing
 
 When Claude Code asks *"Allow MCP server seleniumboot?"* — click **Allow**.
+
+### JetBrains IDEs — Marketplace Plugin
+
+Install **[Selenium Boot MCP](https://plugins.jetbrains.com/plugin/32516)** from
+**Settings → Plugins → Marketplace** (search "Selenium Boot MCP"), or from the plugin page.
+
+The plugin registers the MCP server with the **JetBrains AI Assistant** and prompts to
+`pip install seleniumboot-mcp` if the Python package is missing. Use
+**Tools → Selenium Boot MCP** to install/upgrade, register, or check status.
 
 ### VS Code — Manual
 

@@ -35,7 +35,8 @@ intellijPlatform {
         version = providers.gradleProperty("pluginVersion")
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            // Unbounded: compatible with all future IDE builds (no forced re-release per release)
+            untilBuild = provider { null }
         }
     }
     signing {

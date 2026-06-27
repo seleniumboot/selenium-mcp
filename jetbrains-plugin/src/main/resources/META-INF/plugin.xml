@@ -1,0 +1,56 @@
+<idea-plugin>
+    <id>io.github.seleniumboot.mcp</id>
+    <name>Selenium Boot MCP - AI Browser Automation</name>
+    <version>0.3.7</version>
+    <vendor url="https://github.com/seleniumboot" email="seleniumboot.dev@gmail.com">Selenium Boot</vendor>
+
+    <description><![CDATA[
+        <p>MCP server for <b>Selenium WebDriver</b> browser automation.</p>
+        <p>Lets JetBrains AI Assistant control a real browser — 84 tools for navigation, element interactions,
+        assertions, self-healing locators, and test code generation.</p>
+        <ul>
+            <li>Java TestNG / JUnit 5 / Page Object / Cucumber codegen</li>
+            <li>Python pytest and C# NUnit codegen</li>
+            <li>GitHub Actions / Jenkins / GitLab CI pipeline generation</li>
+            <li>Playwright migration hints</li>
+            <li>No ChromeDriver setup — browser auto-starts on first use</li>
+        </ul>
+        <p>Requires: <code>pip install seleniumboot-mcp</code> and Python 3.10+</p>
+        <p><a href="https://github.com/seleniumboot/selenium-mcp">GitHub</a> |
+           <a href="https://pypi.org/project/seleniumboot-mcp/">PyPI</a> |
+           <a href="https://seleniumboot.github.io/selenium-boot/">Docs</a></p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <ul>
+            <li>0.3.7: CI improvements, 84 tools, Jenkins/GitLab CI codegen</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="io.github.seleniumboot.mcp.SeleniumbootStartupActivity"/>
+        <notificationGroup id="Selenium Boot MCP"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+    </extensions>
+
+    <actions>
+        <group id="SeleniumBoot.Menu" text="Selenium Boot MCP" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="SeleniumBoot.Install"
+                    class="io.github.seleniumboot.mcp.InstallAction"
+                    text="Install / Upgrade seleniumboot-mcp"
+                    description="Run pip install --upgrade seleniumboot-mcp in a terminal"/>
+            <action id="SeleniumBoot.Register"
+                    class="io.github.seleniumboot.mcp.RegisterMCPAction"
+                    text="Register MCP Server with AI Assistant"
+                    description="Add seleniumboot-mcp to JetBrains AI Assistant MCP servers"/>
+            <action id="SeleniumBoot.Status"
+                    class="io.github.seleniumboot.mcp.CheckStatusAction"
+                    text="Check Installation Status"
+                    description="Verify that seleniumboot-mcp is installed and registered"/>
+        </group>
+    </actions>
+</idea-plugin>
