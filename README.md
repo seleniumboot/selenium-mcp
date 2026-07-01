@@ -3,7 +3,7 @@
 A Python **Model Context Protocol (MCP)** server for Selenium WebDriver automation.
 Let Claude or GitHub Copilot control a real browser — navigate pages, interact with elements,
 run assertions, and generate ready-to-run **Java TestNG / JUnit 5 / Cucumber / pytest** test code from recorded sessions.
-82 tools. No ChromeDriver setup. Browser auto-starts on first use.
+84 tools. No ChromeDriver setup. Browser auto-starts on first use.
 
 [![PyPI](https://img.shields.io/pypi/v/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/seleniumboot-mcp)](https://pypi.org/project/seleniumboot-mcp/)

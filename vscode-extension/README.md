@@ -1,7 +1,7 @@
 # Selenium Boot MCP — AI Browser Automation
 
 Control a real Chrome/Firefox browser directly from **GitHub Copilot** and **Claude Code** using the Model Context Protocol.
-82 tools for navigation, interaction, assertions, codegen, and more — no ChromeDriver setup needed.
+84 tools for navigation, interaction, assertions, codegen, and more — no ChromeDriver setup needed.
 
 ---
 
@@ -75,7 +75,7 @@ Open the Command Palette (`Ctrl+Shift+P`) to access:
 
 ---
 
-## Available tools (82)
+## Available tools (84)
 
 ### Browser
 `navigate`, `take_screenshot`, `get_page_source`, `execute_script`, `go_back`, `go_forward`, `refresh`, `scroll_to_top`, `scroll_to_bottom`, `scroll_by`, `get_page_title`, `get_current_url`, `open_new_tab`, `close_current_tab`, `switch_to_window`, `list_windows`, `close_browser`, `emulate_device`, `get_console_logs`, `get_cookies`, `set_cookie`, `delete_cookie`, `delete_all_cookies`, `get_local_storage`, `set_local_storage`, `get_session_storage`, `set_session_storage`, `wait_for_network_idle`, `inspect_page`, `get_network_logs`, `mock_response`, `clear_mock_responses`, `compare_screenshot`, `check_accessibility`
