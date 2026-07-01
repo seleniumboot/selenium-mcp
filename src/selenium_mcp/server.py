@@ -26,7 +26,35 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-app = Server("selenium-mcp")
+SERVER_INSTRUCTIONS = """\
+Selenium Boot MCP — real-browser automation plus test-code generation.
+
+GOLDEN RULE: never hand-write test or page-object source. After driving the
+browser, ALWAYS produce code with the generate_* codegen tools and save their
+output verbatim. Hand-written code drifts from the framework API (wrong driver
+access, non-existent helpers) and invents UI elements that do not exist.
+
+Workflow for "automate X" / "write a test for the X form":
+1. start_browser, then navigate to the page.
+2. Inspect the live DOM (get_page_source) and interact ONLY with elements that
+   are really there. Do NOT assume a form has fields it does not render — e.g.
+   only fill username / password if the page actually shows them.
+3. Generate code from the recorded session with the matching tool:
+     - Java in a Selenium Boot project -> generate_java_page_object with
+       framework="selenium_boot" (Test extends BaseTest, Page extends BasePage,
+       framework-managed driver via getDriver(), accessibility-first locators —
+       getByRole / getByTestId / getByText; compiles against the framework as-is).
+     - Plain Selenium -> framework="testng" or "junit5".
+     - Also: generate_python_test, generate_csharp_nunit, generate_gherkin.
+4. Write each emitted file at the path in its "File:" header, unchanged.
+5. close_browser when finished.
+
+Generated code contains ONLY the elements and actions actually performed, so it
+compiles and never references non-existent fields. To cover more, interact with
+more real elements first, then regenerate — do not pad the test by hand.
+"""
+
+app = Server("selenium-mcp", instructions=SERVER_INSTRUCTIONS)
 
 browser = BrowserTools()
 element = ElementTools(browser)

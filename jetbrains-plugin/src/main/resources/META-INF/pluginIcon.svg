@@ -1,12 +1,21 @@
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
   <defs>
-    <linearGradient id="sbg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#43B02A"/>
-      <stop offset="1" stop-color="#2E7D1B"/>
+    <linearGradient id="sbmcpBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1A2D"/>
+      <stop offset="1" stop-color="#040B16"/>
     </linearGradient>
   </defs>
-  <rect width="40" height="40" rx="9" fill="url(#sbg)"/>
-  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
-        font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18"
-        font-weight="700" fill="#FFFFFF" letter-spacing="-1">SB</text>
+  <rect x="0" y="0" width="40" height="40" rx="8" fill="url(#sbmcpBg)"/>
+  <!-- Selenium Boot hexagon -->
+  <polygon points="20,6.5 31.69,13.25 31.69,26.75 20,33.5 8.31,26.75 8.31,13.25"
+           fill="#0A1523" stroke="#80CE4A" stroke-width="2" stroke-linejoin="round"/>
+  <!-- MCP wordmark (outlined paths, no font dependency) -->
+  <g transform="translate(8.921,23.2) scale(0.00439,-0.00439)"><path d="M188 1493H678L1018 694L1360 1493H1849V0H1485V1092L1141 287H897L553 1092V0H188Z" fill="#F5F9FB"/></g>
+  <g transform="translate(17.877,23.2) scale(0.00439,-0.00439)"><path d="M1372 82Q1266 27 1151.0 -1.0Q1036 -29 911 -29Q538 -29 320.0 179.5Q102 388 102 745Q102 1103 320.0 1311.5Q538 1520 911 1520Q1036 1520 1151.0 1492.0Q1266 1464 1372 1409V1100Q1265 1173 1161.0 1207.0Q1057 1241 942 1241Q736 1241 618.0 1109.0Q500 977 500 745Q500 514 618.0 382.0Q736 250 942 250Q1057 250 1161.0 284.0Q1265 318 1372 391Z" fill="#F5F9FB"/></g>
+  <g transform="translate(24.482,23.2) scale(0.00439,-0.00439)"><path d="M188 1493H827Q1112 1493 1264.5 1366.5Q1417 1240 1417 1006Q1417 771 1264.5 644.5Q1112 518 827 518H573V0H188ZM573 1214V797H786Q898 797 959.0 851.5Q1020 906 1020 1006Q1020 1106 959.0 1160.0Q898 1214 786 1214Z" fill="#F5F9FB"/></g>
+  <!-- verified check badge -->
+  <circle cx="28.9" cy="28.9" r="5.7" fill="#040B16"/>
+  <circle cx="28.9" cy="28.9" r="4.6" fill="#80CE4A"/>
+  <path d="M26.5,29.0 L28.1,30.6 L31.3,27.1" fill="none" stroke="#0A1523"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

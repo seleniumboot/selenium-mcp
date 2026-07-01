@@ -542,6 +542,33 @@ class ElementTools:
     #  Handlers                                                            #
     # ------------------------------------------------------------------ #
 
+    def _semantic_attrs(self, el) -> dict:
+        """Snapshot an element's accessibility-relevant attributes at interaction
+        time, so codegen can prefer advanced locators (getByTestId / getByRole /
+        getByPlaceholder / ...) no matter which selector was used to interact.
+        One JS round-trip; best-effort — never raises."""
+        try:
+            return self.browser.get_driver().execute_script(
+                """
+                const e = arguments[0];
+                return {
+                  tag: e.tagName ? e.tagName.toLowerCase() : '',
+                  type: (e.getAttribute('type') || '').toLowerCase(),
+                  testid: e.getAttribute('data-testid') || e.getAttribute('data-test-id')
+                          || e.getAttribute('data-test') || e.getAttribute('data-cy') || '',
+                  role: e.getAttribute('role') || '',
+                  ariaLabel: e.getAttribute('aria-label') || '',
+                  placeholder: e.getAttribute('placeholder') || '',
+                  alt: e.getAttribute('alt') || '',
+                  title: e.getAttribute('title') || '',
+                  idAttr: e.getAttribute('id') || '',
+                  nameAttr: e.getAttribute('name') || '',
+                  text: (e.textContent || '').trim().slice(0, 80)
+                };
+                """, el) or {}
+        except Exception:
+            return {}
+
     async def _find_element(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
         return f"tag={el.tag_name} | text='{el.text}' | displayed={el.is_displayed()}{self._heal_note()}"
@@ -554,18 +581,20 @@ class ElementTools:
 
     async def _click(self, args: dict) -> str:
         el = self._find_clickable(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         el.click()
-        self.browser.record("click", selector=args["selector"], by=args.get("by", "css"))
+        self.browser.record("click", selector=args["selector"], by=args.get("by", "css"), attrs=attrs)
         return f"✅ Clicked '{args['selector']}'{self._heal_note()}"
 
     async def _type_text(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         if args.get("clear_first", True):
             el.clear()
         el.send_keys(args["text"])
         sel_lower = args["selector"].lower()
         logged_text = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else args["text"]
-        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text)
+        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text, attrs=attrs)
         return f"✅ Typed into '{args['selector']}'{self._heal_note()}"
 
     async def _get_text(self, args: dict) -> str:
@@ -581,38 +610,42 @@ class ElementTools:
 
     async def _select_option(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         sel = Select(el)
         note = self._heal_note()
         if "by_text" in args:
             sel.select_by_visible_text(args["by_text"])
-            self.browser.record("select_option", selector=args["selector"], by_text=args["by_text"])
+            self.browser.record("select_option", selector=args["selector"], by_text=args["by_text"], attrs=attrs)
             return f"✅ Selected by text: '{args['by_text']}'{note}"
         elif "by_value" in args:
             sel.select_by_value(args["by_value"])
-            self.browser.record("select_option", selector=args["selector"], by_value=args["by_value"])
+            self.browser.record("select_option", selector=args["selector"], by_value=args["by_value"], attrs=attrs)
             return f"✅ Selected by value: '{args['by_value']}'{note}"
         elif "by_index" in args:
             sel.select_by_index(args["by_index"])
-            self.browser.record("select_option", selector=args["selector"], by_index=args["by_index"])
+            self.browser.record("select_option", selector=args["selector"], by_index=args["by_index"], attrs=attrs)
             return f"✅ Selected by index: {args['by_index']}{note}"
         return "❌ Provide by_text, by_value, or by_index"
 
     async def _hover(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         ActionChains(self.browser.get_driver()).move_to_element(el).perform()
-        self.browser.record("hover", selector=args["selector"], by=args.get("by", "css"))
+        self.browser.record("hover", selector=args["selector"], by=args.get("by", "css"), attrs=attrs)
         return f"✅ Hovered over '{args['selector']}'{self._heal_note()}"
 
     async def _double_click(self, args: dict) -> str:
         el = self._find_clickable(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         ActionChains(self.browser.get_driver()).double_click(el).perform()
-        self.browser.record("double_click", selector=args["selector"], by=args.get("by", "css"))
+        self.browser.record("double_click", selector=args["selector"], by=args.get("by", "css"), attrs=attrs)
         return f"✅ Double-clicked '{args['selector']}'{self._heal_note()}"
 
     async def _right_click(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         ActionChains(self.browser.get_driver()).context_click(el).perform()
-        self.browser.record("right_click", selector=args["selector"], by=args.get("by", "css"))
+        self.browser.record("right_click", selector=args["selector"], by=args.get("by", "css"), attrs=attrs)
         return f"✅ Right-clicked '{args['selector']}'{self._heal_note()}"
 
     async def _drag_and_drop(self, args: dict) -> str:
@@ -650,8 +683,9 @@ class ElementTools:
 
     async def _scroll_to_element(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
+        attrs = self._semantic_attrs(el)
         self.browser.get_driver().execute_script("arguments[0].scrollIntoView(true);", el)
-        self.browser.record("scroll_to_element", selector=args["selector"], by=args.get("by", "css"))
+        self.browser.record("scroll_to_element", selector=args["selector"], by=args.get("by", "css"), attrs=attrs)
         return f"✅ Scrolled to '{args['selector']}'{self._heal_note()}"
 
     async def _clear_field(self, args: dict) -> str:

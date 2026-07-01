@@ -181,8 +181,13 @@ class CodegenTools:
                 name="generate_java_page_object",
                 description=(
                     "Generate a Java Page Object class + matching test class from the recorded session. "
-                    "Produces two files: a Page Object (locators + fluent action methods) and a Test class "
-                    "that uses it. Supports TestNG and JUnit 5."
+                    "USE THIS INSTEAD OF WRITING JAVA BY HAND — the output compiles as-is and contains only "
+                    "the elements/actions actually performed, so it never invents fields or uses non-existent "
+                    "framework APIs. Produces two files: a Page Object (locators + fluent action methods) and a "
+                    "Test class that uses it. Supports raw Selenium (TestNG / JUnit 5) and the Selenium Boot "
+                    "framework (selenium_boot): Page Object extends BasePage, Test extends BaseTest, no manual "
+                    "driver lifecycle — the framework manages it — with accessibility-first locators. "
+                    "For any Java test in a Selenium Boot repo, use framework=\"selenium_boot\"."
                 ),
                 inputSchema={
                     "type": "object",
@@ -193,11 +198,20 @@ class CodegenTools:
                         },
                         "package_name": {
                             "type": "string",
-                            "default": "com.tests.selenium"
+                            "description": ("Base package, e.g. com.demo. The Page Object is placed in "
+                                            "<base>.pages and the Test in <base>.tests. A trailing .pages "
+                                            "or .tests is stripped, so passing either the base or a pages "
+                                            "package works."),
+                            "default": "com.example"
                         },
                         "framework": {
                             "type": "string",
-                            "enum": ["testng", "junit5"],
+                            "enum": ["testng", "junit5", "selenium_boot"],
+                            "description": (
+                                "Output flavor: 'testng'/'junit5' emit standalone Selenium with a "
+                                "ChromeDriver setUp/tearDown; 'selenium_boot' emits Selenium Boot "
+                                "(BasePage/BaseTest, framework-managed driver, web-first assertions)."
+                            ),
                             "default": "testng"
                         }
                     },
@@ -626,8 +640,13 @@ public class {test_name} {{
 
     async def _generate_java_page_object(self, args: dict) -> str:
         log = self.browser._session_log
-        package = args.get("package_name", "com.tests.selenium")
-        pages_package = f"{package}.pages"
+        raw_pkg = args.get("package_name", "com.example")
+        # Accept a base package (com.demo) OR a *.pages / *.tests package and derive
+        # a clean base, so the Page lands in <base>.pages and the Test in <base>.tests
+        # — never a doubled ".pages.pages", and the test never sits in the pages folder.
+        base_package = re.sub(r"\.(pages|tests)$", "", raw_pkg)
+        pages_package = f"{base_package}.pages"
+        tests_package = f"{base_package}.tests"
         framework = args.get("framework", "testng")
 
         base_url = next((e["url"] for e in log if e.get("action") == "navigate"), "")
@@ -637,8 +656,12 @@ public class {test_name} {{
 
         elements = self._build_element_map(log)
 
-        page_code = self._java_page_class(page_name, pages_package, elements)
-        test_code = self._java_pom_test(test_name, package, pages_package, page_name, framework, base_url, log, elements)
+        if framework == "selenium_boot":
+            page_code = self._java_sb_page_class(page_name, pages_package, elements)
+            test_code = self._java_sb_test(test_name, tests_package, pages_package, page_name, base_url, log, elements)
+        else:
+            page_code = self._java_page_class(page_name, pages_package, elements)
+            test_code = self._java_pom_test(test_name, tests_package, pages_package, page_name, framework, base_url, log, elements)
 
         sep = "=" * 60
         return (
@@ -647,7 +670,7 @@ public class {test_name} {{
             f"{sep}\n"
             f"{page_code}\n\n"
             f"{sep}\n"
-            f"File: {package.replace('.', '/')}/{test_name}.java\n"
+            f"File: {tests_package.replace('.', '/')}/{test_name}.java\n"
             f"{sep}\n"
             f"{test_code}"
         )
@@ -659,6 +682,26 @@ public class {test_name} {{
         except Exception:
             return "Recorded"
 
+    def _url_path(self, url: str) -> str:
+        """Path (+query/fragment) of a URL for baseUrl-relative open() calls."""
+        try:
+            p = urlparse(url)
+            path = p.path or "/"
+            if p.query:
+                path += f"?{p.query}"
+            if p.fragment:
+                path += f"#{p.fragment}"
+            return path or "/"
+        except Exception:
+            return "/"
+
+    def _same_origin(self, a: str, b: str) -> bool:
+        try:
+            pa, pb = urlparse(a), urlparse(b)
+            return (pa.scheme, pa.netloc) == (pb.scheme, pb.netloc)
+        except Exception:
+            return False
+
     def _selector_to_name(self, selector: str, by: str) -> str:
         sel = selector.strip()
         if by in ("id", "name"):
@@ -668,6 +711,11 @@ public class {test_name} {{
                 return self._to_camel(sel[1:])
             if sel.startswith("."):
                 return self._to_camel(sel[1:].split(".")[0])
+            am = re.search(
+                r"\[\s*(?:data-testid|placeholder|alt|title|aria-label|name)\s*=\s*['\"]([^'\"]+)['\"]",
+                sel)
+            if am:
+                return self._to_camel(re.sub(r"[^\w]+", "_", am.group(1).strip())) or "element"
             m = re.search(r"\[type=['\"]?(\w+)['\"]?\]", sel)
             if m:
                 typ = m.group(1)
@@ -681,7 +729,13 @@ public class {test_name} {{
             clean = re.sub(r"[^\w]", "_", sel).strip("_")
             return self._to_camel(clean[:30]) or "element"
         if by == "xpath":
-            parts = [p for p in re.split(r"[/\[\]@=]", sel) if p and p[0].isalpha()]
+            # Prefer a human-readable literal (text/aria-label/title/...) when present.
+            lit = re.search(r"(?:text\(\)|normalize-space\(\)|\.)\s*=\s*['\"]([^'\"]+)['\"]", sel) \
+                or re.search(r"@(?:aria-label|title|alt|placeholder|value|name|id)=['\"]([^'\"]+)['\"]", sel)
+            if lit:
+                return self._to_camel(re.sub(r"[^\w]+", "_", lit.group(1).strip())) or "element"
+            parts = [p for p in re.split(r"[/\[\]@=]", sel)
+                     if p and p[0].isalpha() and not p.endswith("()")]
             name = parts[-1] if parts else "element"
             return self._to_camel(re.sub(r"[^\w]", "_", name))
         if by in ("tag", "class"):
@@ -712,14 +766,15 @@ public class {test_name} {{
 
             key = (sel, by)
             if key not in key_to_name:
-                raw = self._selector_to_name(sel, by)
+                attrs = entry.get("attrs") or {}
+                raw = self._element_name(sel, by, attrs)
                 name = raw
                 suffix = 2
                 while name in elements:
                     name = f"{raw}{suffix}"
                     suffix += 1
                 key_to_name[key] = name
-                elements[name] = {"selector": sel, "by": by, "actions": set(), "meta": {}}
+                elements[name] = {"selector": sel, "by": by, "actions": set(), "meta": {}, "attrs": attrs}
 
             name = key_to_name[key]
             elements[name]["actions"].add(action)
@@ -897,6 +952,284 @@ public class {test_name} {{
                 lines.append(f"{i}{i}driver.navigate().forward();")
             elif action == "refresh":
                 lines.append(f"{i}{i}driver.navigate().refresh();")
+            elif name:
+                cap = name[0].upper() + name[1:]
+                if action == "type_text":
+                    lines.append(f'{i}{i}page.enter{cap}("{entry.get("text", "")}");')
+                elif action == "click":
+                    lines.append(f"{i}{i}page.click{cap}();")
+                elif action == "hover":
+                    lines.append(f"{i}{i}page.hover{cap}();")
+                elif action == "double_click":
+                    lines.append(f"{i}{i}page.doubleClick{cap}();")
+                elif action == "scroll_to_element":
+                    lines.append(f"{i}{i}page.scrollTo{cap}();")
+                elif action == "select_option":
+                    meta = elements[name]["meta"]
+                    if meta.get("select_key") == "by_text":
+                        lines.append(f'{i}{i}page.select{cap}ByText("{meta["select_val"]}");')
+                    else:
+                        lines.append(f'{i}{i}page.select{cap}ByValue("{meta.get("select_val", "")}");')
+
+        lines += [f"{i}}}", "}"]
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------ #
+    #  Selenium Boot flavor (BasePage / BaseTest)                          #
+    # ------------------------------------------------------------------ #
+    _ROLE_ENUM = {
+        "button": "BUTTON", "link": "LINK", "checkbox": "CHECKBOX", "radio": "RADIO",
+        "switch": "SWITCH", "textbox": "TEXTBOX", "searchbox": "SEARCHBOX",
+        "combobox": "COMBOBOX", "option": "OPTION", "heading": "HEADING", "img": "IMG",
+        "tab": "TAB", "menuitem": "MENUITEM", "slider": "SLIDER", "spinbutton": "SPINBUTTON",
+    }
+
+    def _element_name(self, selector: str, by: str, attrs: dict) -> str:
+        """Field name — prefer a human-readable attribute (aria-label / testid /
+        name / id) captured from the DOM; else fall back to the selector."""
+        a = attrs or {}
+        for key in ("ariaLabel", "testid", "nameAttr", "idAttr"):
+            val = (a.get(key) or "").strip()
+            if val:
+                cleaned = re.sub(r"[-_](input|select|field|btn|button|dropdown|checkbox|radio)$",
+                                 "", val, flags=re.I)
+                camel = self._to_camel(re.sub(r"[^\w]+", "_", cleaned))
+                if camel and camel != "element":
+                    return camel
+        if a.get("tag") in ("button", "a") and (a.get("text") or "").strip():
+            return self._to_camel(re.sub(r"[^\w]+", "_", a["text"].strip()[:30])) or "element"
+        return self._selector_to_name(selector, by)
+
+    def _role_enum_from(self, a: dict):
+        role = (a.get("role") or "").strip().lower()
+        if role in self._ROLE_ENUM:
+            return self._ROLE_ENUM[role]
+        tag = (a.get("tag") or "").lower()
+        typ = (a.get("type") or "").lower()
+        if tag == "button" or (tag == "input" and typ in ("submit", "button", "reset")):
+            return "BUTTON"
+        if tag == "a":
+            return "LINK"
+        if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            return "HEADING"
+        return None
+
+    def _sb_locator_from_attrs(self, attrs: dict, by: str, selector: str) -> str:
+        """Accessibility-first Locator expression, prioritising the element's real
+        DOM attributes (captured at interaction time) over the selector that was
+        used to interact. Priority: data-testid > role+name (button/link/heading)
+        > placeholder > alt > title > id > name > selector-based inference."""
+        a = attrs or {}
+        q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+
+        testid = (a.get("testid") or "").strip()
+        if testid:
+            return f'getByTestId("{q(testid)}")'
+
+        role = self._role_enum_from(a)
+        name = (a.get("ariaLabel") or a.get("text") or a.get("title") or "").strip()
+        if role in ("BUTTON", "LINK", "HEADING") and name:
+            expr = f'getByRole(Role.{role}, "{q(name)}")'
+            tag = (a.get("tag") or "")
+            if role == "HEADING" and re.fullmatch(r"h[1-6]", tag):
+                expr += f".withLevel({tag[1]})"
+            return expr
+
+        for key, factory in (("placeholder", "getByPlaceholder"),
+                             ("alt", "getByAltText"),
+                             ("title", "getByTitle")):
+            val = (a.get(key) or "").strip()
+            if val:
+                return f'{factory}("{q(val)}")'
+
+        idv = (a.get("idAttr") or "").strip()
+        if idv:
+            return f'$(By.id("{q(idv)}"))'
+        namev = (a.get("nameAttr") or "").strip()
+        if namev:
+            return f'$(By.name("{q(namev)}"))'
+
+        # No usable attributes recorded (older sessions) — infer from the selector.
+        return self._sb_locator_expr(by, selector)
+
+    def _sb_locator_expr(self, by: str, selector: str) -> str:
+        """Map a recorded (by, selector) to a Selenium Boot Locator expression.
+
+        Prefers accessibility-first locators (getByRole/getByText/getByTestId/
+        getByPlaceholder/getByAltText/getByTitle) when the selector encodes that
+        semantic; otherwise falls back to $() wrapping a plain By, keeping every
+        element inside the framework's Locator strategy.
+        """
+        sel = (selector or "").strip()
+        q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+
+        if by == "link":
+            return f'getByRole(Role.LINK, "{q(sel)}")'
+
+        if by == "xpath":
+            tm = re.search(r"(?:text\(\)|normalize-space\(\)|\.)\s*=\s*['\"]([^'\"]+)['\"]", sel)
+            tag_m = re.match(r"^/{0,2}(\w+)", sel)
+            tag = tag_m.group(1).lower() if tag_m else ""
+            if tm:
+                txt = tm.group(1).strip()
+                if tag == "button" or re.search(r"@type=['\"](?:submit|button)['\"]", sel):
+                    return f'getByRole(Role.BUTTON, "{q(txt)}")'
+                if tag == "a":
+                    return f'getByRole(Role.LINK, "{q(txt)}")'
+                if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+                    return f'getByRole(Role.HEADING, "{q(txt)}").withLevel({tag[1]})'
+                return f'getByText("{q(txt)}")'
+            idm = re.search(r"@id=['\"]([^'\"]+)['\"]", sel)
+            if idm:
+                return f'$(By.id("{q(idm.group(1))}"))'
+            return f'$(By.xpath("{q(sel)}"))'
+
+        if by == "css":
+            for attr, factory in (("data-testid", "getByTestId"),
+                                  ("placeholder", "getByPlaceholder"),
+                                  ("alt", "getByAltText"),
+                                  ("title", "getByTitle")):
+                m = re.search(rf"\[\s*{attr}\s*=\s*['\"]([^'\"]+)['\"]\s*\]", sel)
+                if m:
+                    return f'{factory}("{q(m.group(1))}")'
+
+            m = re.fullmatch(r"#([\w-]+)", sel)
+            if m:
+                return f'$(By.id("{q(m.group(1))}"))'
+            return f'$("{q(sel)}")'
+
+        if by == "id":
+            return f'$(By.id("{q(sel)}"))'
+        if by == "name":
+            return f'$(By.name("{q(sel)}"))'
+        if by == "tag":
+            return f'$(By.tagName("{q(sel)}"))'
+        if by == "class":
+            return f'$(By.className("{q(sel)}"))'
+        return f'$(By.cssSelector("{q(sel)}"))'
+
+    def _java_sb_page_class(self, page_name: str, package: str, elements: dict) -> str:
+        """Page Object extending com.seleniumboot.test.BasePage.
+
+        Locators are accessibility-first (getByRole/getByText/getByTestId/...),
+        stored as Locator fields, with fluent action methods. Actions the Locator
+        API doesn't cover natively (double/right-click, select) bridge to BasePage
+        helpers via Locator.toBy().
+        """
+        i = "    "
+        i2 = i + i
+
+        field_lines = []
+        for name, el in elements.items():
+            field_lines.append(
+                f"{i}private final Locator {name} = "
+                f"{self._sb_locator_from_attrs(el.get('attrs'), el['by'], el['selector'])};"
+            )
+
+        body = [
+            f"{i}public {page_name}(WebDriver driver) {{",
+            f"{i}{i}super(driver);",
+            f"{i}}}",
+            "",
+        ]
+
+        for name, el in elements.items():
+            cap = name[0].upper() + name[1:]
+            acts = el["actions"]
+
+            if "type_text" in acts:
+                body += [f"{i}public {page_name} enter{cap}(String text) {{",
+                         f"{i2}{name}.type(text);", f"{i2}return this;", f"{i}}}", ""]
+            if "click" in acts:
+                body += [f"{i}public {page_name} click{cap}() {{",
+                         f"{i2}{name}.click();", f"{i2}return this;", f"{i}}}", ""]
+            if "hover" in acts:
+                body += [f"{i}public {page_name} hover{cap}() {{",
+                         f"{i2}{name}.hover();", f"{i2}return this;", f"{i}}}", ""]
+            if "scroll_to_element" in acts:
+                body += [f"{i}public {page_name} scrollTo{cap}() {{",
+                         f"{i2}{name}.scrollIntoView();", f"{i2}return this;", f"{i}}}", ""]
+            if "double_click" in acts:
+                body += [f"{i}public {page_name} doubleClick{cap}() {{",
+                         f"{i2}doubleClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
+            if "right_click" in acts:
+                body += [f"{i}public {page_name} rightClick{cap}() {{",
+                         f"{i2}rightClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
+            if "select_option" in acts:
+                body += [f"{i}public {page_name} select{cap}ByText(String text) {{",
+                         f"{i2}selectByText({name}.toBy(), text);", f"{i2}return this;", f"{i}}}", "",
+                         f"{i}public {page_name} select{cap}ByValue(String value) {{",
+                         f"{i2}selectByValue({name}.toBy(), value);", f"{i2}return this;", f"{i}}}", ""]
+
+        rendered = "\n".join(field_lines + body)
+
+        imports = [
+            "import com.seleniumboot.test.BasePage;",
+            "import com.seleniumboot.locator.Locator;",
+        ]
+        if "Role." in rendered:
+            imports.append("import com.seleniumboot.locator.Role;")
+        if "By." in rendered:
+            imports.append("import org.openqa.selenium.By;")
+        imports.append("import org.openqa.selenium.WebDriver;")
+
+        lines = [f"package {package};", ""]
+        lines += imports
+        lines += ["", f"public class {page_name} extends BasePage {{", ""]
+        lines += field_lines
+        lines.append("")
+        lines += body
+        lines.append("}")
+        return "\n".join(lines)
+
+    def _java_sb_test(self, test_name, package, pages_package, page_name,
+                      base_url, log, elements) -> str:
+        """Test extending com.seleniumboot.test.BaseTest.
+
+        No setUp/tearDown or ChromeDriver — the framework owns the driver
+        lifecycle. Navigation uses open("/path"), which resolves against
+        execution.baseUrl in selenium-boot.yml; a cross-origin hop falls back to
+        getDriver().get(absoluteUrl).
+        """
+        i = "    "
+        key_to_name = {(v["selector"], v["by"]): n for n, v in elements.items()}
+
+        lines = [
+            f"package {package};",
+            "",
+            f"import {pages_package}.{page_name};",
+            "import com.seleniumboot.test.BaseTest;",
+            "import org.testng.annotations.Test;",
+            "",
+            f"public class {test_name} extends BaseTest {{",
+            "",
+            f"{i}@Test",
+            f"{i}public void recordedFlowTest() {{",
+        ]
+
+        if base_url:
+            lines.append(f"{i}{i}// baseUrl (execution.baseUrl in selenium-boot.yml) should be the site origin")
+            lines.append(f'{i}{i}open("{self._url_path(base_url)}");')
+        lines.append(f"{i}{i}{page_name} page = new {page_name}(getDriver());")
+
+        for entry in log:
+            action = entry.get("action")
+            sel = entry.get("selector", "")
+            by = entry.get("by", "css")
+            name = key_to_name.get((sel, by))
+
+            if action == "navigate" and entry.get("url") != base_url:
+                url = entry["url"]
+                if self._same_origin(url, base_url):
+                    lines.append(f'{i}{i}open("{self._url_path(url)}");')
+                else:
+                    lines.append(f'{i}{i}getDriver().get("{url}");')
+            elif action == "go_back":
+                lines.append(f"{i}{i}getDriver().navigate().back();")
+            elif action == "go_forward":
+                lines.append(f"{i}{i}getDriver().navigate().forward();")
+            elif action == "refresh":
+                lines.append(f"{i}{i}getDriver().navigate().refresh();")
             elif name:
                 cap = name[0].upper() + name[1:]
                 if action == "type_text":
