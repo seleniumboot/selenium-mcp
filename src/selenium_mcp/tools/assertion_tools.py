@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from mcp.types import Tool
 from selenium_mcp.tools._locators import BY_MAP
+from selenium_mcp.tools._attrs import semantic_attrs
 
 
 class AssertionTools:
@@ -159,12 +160,16 @@ class AssertionTools:
         actual = self._driver().title
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
+        if ok:
+            self.browser.record("assert_title", expected=exp, exact=args.get("exact", False))
         return self._pass(f"title='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_url(self, args: dict) -> str:
         actual = self._driver().current_url
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
+        if ok:
+            self.browser.record("assert_url", expected=exp, exact=args.get("exact", False))
         return self._pass(f"url='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_text(self, args: dict) -> str:
@@ -179,15 +184,21 @@ class AssertionTools:
         actual = el.text
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", False) else (exp.lower() in actual.lower())
+        if ok:
+            self.browser.record("assert_text", selector=args["selector"], by=args.get("by", "css"),
+                                expected=exp, exact=args.get("exact", False),
+                                attrs=semantic_attrs(self._driver(), el))
         return self._pass(f"text='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_element_visible(self, args: dict) -> str:
         by = self._by(args.get("by", "css"))
         timeout = args.get("timeout", 10)
         try:
-            WebDriverWait(self._driver(), timeout).until(
+            el = WebDriverWait(self._driver(), timeout).until(
                 EC.visibility_of_element_located((by, args["selector"]))
             )
+            self.browser.record("assert_visible", selector=args["selector"], by=args.get("by", "css"),
+                                attrs=semantic_attrs(self._driver(), el))
             return self._pass(f"'{args['selector']}' is visible")
         except Exception:
             return self._fail(f"'{args['selector']}' is NOT visible")
@@ -199,6 +210,7 @@ class AssertionTools:
             WebDriverWait(self._driver(), timeout).until(
                 EC.invisibility_of_element_located((by, args["selector"]))
             )
+            self.browser.record("assert_hidden", selector=args["selector"], by=args.get("by", "css"))
             return self._pass(f"'{args['selector']}' is not visible")
         except Exception:
             return self._fail(f"'{args['selector']}' IS visible (expected hidden)")
@@ -215,6 +227,10 @@ class AssertionTools:
         actual = el.get_attribute(args["attribute"])
         exp = args["expected"]
         ok = (actual == exp) if args.get("exact", True) else (exp in (actual or ""))
+        if ok:
+            self.browser.record("assert_attribute", selector=args["selector"], by=args.get("by", "css"),
+                                attribute=args["attribute"], expected=exp,
+                                attrs=semantic_attrs(self._driver(), el))
         return self._pass(f"{args['attribute']}='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 
     async def _assert_page_contains(self, args: dict) -> str:
@@ -224,6 +240,8 @@ class AssertionTools:
         else:
             content = self._driver().find_element(By.TAG_NAME, "body").text
         ok = text.lower() in content.lower()
+        if ok and not args.get("source_only", False):
+            self.browser.record("assert_page_contains", text=text)
         return self._pass(f"page contains '{text}'") if ok else self._fail(f"'{text}' not found on page")
 
     async def _assert_element_count(self, args: dict) -> str:
@@ -232,4 +250,7 @@ class AssertionTools:
         actual = len(els)
         exp = args["expected_count"]
         ok = actual == exp
+        if ok:
+            self.browser.record("assert_count", selector=args["selector"], by=args.get("by", "css"),
+                                expected_count=exp)
         return self._pass(f"count={actual}") if ok else self._fail(f"expected={exp} | actual={actual}")

@@ -1,12 +1,12 @@
 <idea-plugin>
     <id>io.github.seleniumboot.mcp</id>
     <name>Selenium Boot MCP - AI Browser Automation</name>
-    <version>0.3.7</version>
+    <version>0.4.0</version>
     <vendor url="https://github.com/seleniumboot" email="seleniumboot.dev@gmail.com">Selenium Boot</vendor>
 
     <description><![CDATA[
         <p>MCP server for <b>Selenium WebDriver</b> browser automation.</p>
-        <p>Lets JetBrains AI Assistant control a real browser — 84 tools for navigation, element interactions,
+        <p>Lets JetBrains AI Assistant control a real browser — 85 tools for navigation, element interactions,
         assertions, self-healing locators, and test code generation.</p>
         <ul>
             <li>Java TestNG / JUnit 5 / Page Object / Cucumber codegen</li>
@@ -23,6 +23,11 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>0.4.0: Framework-native Selenium Boot codegen — accessibility-first
+                locators (getByRole / getByLabel / getByTestId) and web-first
+                assertThat assertions across TestNG, JUnit 5, Page Object and
+                Cucumber; new detect_selenium_boot tool; SmartLocator fallback;
+                85 tools.</li>
             <li>0.3.7: CI improvements, 84 tools, Jenkins/GitLab CI codegen</li>
         </ul>
     ]]></change-notes>

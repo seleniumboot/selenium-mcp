@@ -1,8 +1,8 @@
 {
   "name": "selenium-boot-mcp",
   "displayName": "Selenium Boot MCP — AI Browser Automation",
-  "description": "MCP server for Selenium WebDriver automation. Lets GitHub Copilot and Claude control a real browser — 84 tools for navigation, interaction, assertions, and test codegen.",
-  "version": "0.3.9",
+  "description": "MCP server for Selenium WebDriver automation. Lets GitHub Copilot and Claude control a real browser — 85 tools for navigation, interaction, assertions, and test codegen.",
+  "version": "0.4.0",
   "publisher": "seleniumboot",
   "icon": "icon.png",
   "engines": {

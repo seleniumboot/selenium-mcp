@@ -38,14 +38,25 @@ Workflow for "automate X" / "write a test for the X form":
 1. start_browser, then navigate to the page.
 2. Inspect the live DOM (get_page_source) and interact ONLY with elements that
    are really there. Do NOT assume a form has fields it does not render — e.g.
-   only fill username / password if the page actually shows them.
-3. Generate code from the recorded session with the matching tool:
-     - Java in a Selenium Boot project -> generate_java_page_object with
-       framework="selenium_boot" (Test extends BaseTest, Page extends BasePage,
-       framework-managed driver via getDriver(), accessibility-first locators —
-       getByRole / getByTestId / getByText; compiles against the framework as-is).
-     - Plain Selenium -> framework="testng" or "junit5".
-     - Also: generate_python_test, generate_csharp_nunit, generate_gherkin.
+   only fill username / password if the page actually shows them. Use the
+   assert_* tools to capture the checks you want in the test (visible / text /
+   title / url); passing assertions are recorded and become web-first
+   assertThat(...) assertions in the Selenium Boot output.
+3. BEFORE generating Java, call detect_selenium_boot. If it reports detected=true
+   (or you otherwise know this is a Selenium Boot project), generate with
+   framework="selenium_boot" — EVERY Java generator supports it:
+     - generate_java_page_object  -> Page extends BasePage, Test extends BaseTest
+     - generate_java_testng       -> extends BaseTest
+     - generate_java_junit5       -> extends BaseJUnit5Test
+     - generate_gherkin           -> steps extend BaseCucumberSteps
+   The selenium_boot flavor uses framework-managed driver (no ChromeDriver
+   setUp/tearDown), accessibility-first locators (getByRole / getByLabel /
+   getByTestId / getByPlaceholder / getByText), a SmartLocator fallback for
+   brittle selectors, and web-first assertThat(...) assertions. It compiles
+   against the framework as-is.
+   For a non-Selenium-Boot project use framework="testng" / "junit5" / "raw",
+   or generate_python_test / generate_csharp_nunit. When Selenium Boot is
+   detected, the raw generators prepend a banner recommending you regenerate.
 4. Write each emitted file at the path in its "File:" header, unchanged.
 5. close_browser when finished.
 

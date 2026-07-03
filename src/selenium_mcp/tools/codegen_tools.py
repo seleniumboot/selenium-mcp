@@ -6,6 +6,7 @@ from the recorded session log. This is the key differentiator for Java users.
 import re
 from urllib.parse import urlparse
 from mcp.types import Tool
+from selenium_mcp.tools._detect import detect_selenium_boot, recommendation_banner
 
 
 class CodegenTools:
@@ -40,7 +41,12 @@ class CodegenTools:
                 name="generate_java_testng",
                 description=(
                     "Generate a Java TestNG test class from the current browser session. "
-                    "Includes @BeforeMethod, @Test, @AfterMethod and WebDriverWait patterns."
+                    "framework='testng' (default) emits standalone Selenium with a "
+                    "ChromeDriver setUp/tearDown; framework='selenium_boot' emits a "
+                    "Selenium Boot test (extends BaseTest, framework-managed driver, "
+                    "accessibility-first getByRole/getByLabel/getByTestId locators and "
+                    "web-first assertThat assertions — no driver lifecycle boilerplate). "
+                    "In a Selenium Boot project, use framework='selenium_boot'."
                 ),
                 inputSchema={
                     "type": "object",
@@ -52,6 +58,12 @@ class CodegenTools:
                         "package_name": {
                             "type": "string",
                             "default": "com.tests.selenium"
+                        },
+                        "framework": {
+                            "type": "string",
+                            "enum": ["testng", "selenium_boot"],
+                            "default": "testng",
+                            "description": "Output flavor. Use 'selenium_boot' inside a Selenium Boot project."
                         }
                     },
                 },
@@ -60,7 +72,11 @@ class CodegenTools:
                 name="generate_java_junit5",
                 description=(
                     "Generate a Java JUnit 5 test class from the current browser session. "
-                    "Includes @BeforeEach, @Test, @AfterEach and proper WebDriverWait usage."
+                    "framework='junit5' (default) emits standalone Selenium with a "
+                    "ChromeDriver setUp/tearDown; framework='selenium_boot' emits a "
+                    "Selenium Boot test (extends BaseJUnit5Test, framework-managed driver, "
+                    "accessibility-first locators and web-first assertThat assertions). "
+                    "In a Selenium Boot project, use framework='selenium_boot'."
                 ),
                 inputSchema={
                     "type": "object",
@@ -72,6 +88,32 @@ class CodegenTools:
                         "package_name": {
                             "type": "string",
                             "default": "com.tests.selenium"
+                        },
+                        "framework": {
+                            "type": "string",
+                            "enum": ["junit5", "selenium_boot"],
+                            "default": "junit5",
+                            "description": "Output flavor. Use 'selenium_boot' inside a Selenium Boot project."
+                        }
+                    },
+                },
+            ),
+            Tool(
+                name="detect_selenium_boot",
+                description=(
+                    "Detect whether the current working directory is inside a Selenium Boot "
+                    "project (looks for selenium-boot.yml or the io.github.seleniumboot "
+                    "dependency in pom.xml / build.gradle, walking up parent directories). "
+                    "Call this BEFORE generating Java code: if it reports detected=true, "
+                    "generate with framework=\"selenium_boot\" so the output uses the "
+                    "framework's accessibility-first locators and managed driver."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project_dir": {
+                            "type": "string",
+                            "description": "Optional path to start detection from. Defaults to the server's working directory."
                         }
                     },
                 },
@@ -91,7 +133,10 @@ class CodegenTools:
                 description=(
                     "Generate a Cucumber Gherkin .feature file + Java step definitions class "
                     "from the recorded browser session. Steps are written in plain English "
-                    "and wired to full Selenium WebDriver code."
+                    "and wired to Java code. framework='raw' (default) emits standalone "
+                    "Selenium with a ChromeDriver @Before/@After; framework='selenium_boot' "
+                    "emits steps extending BaseCucumberSteps with framework-managed driver "
+                    "and accessibility-first locators. Use 'selenium_boot' in a Selenium Boot project."
                 ),
                 inputSchema={
                     "type": "object",
@@ -107,6 +152,12 @@ class CodegenTools:
                         "package_name": {
                             "type": "string",
                             "default": "com.tests.selenium"
+                        },
+                        "framework": {
+                            "type": "string",
+                            "enum": ["raw", "selenium_boot"],
+                            "default": "raw",
+                            "description": "Step-definition flavor. Use 'selenium_boot' inside a Selenium Boot project."
                         }
                     },
                 },
@@ -227,6 +278,7 @@ class CodegenTools:
             "get_session_log":            self._get_session_log,
             "clear_session_log":          self._clear_session_log,
             "generate_java_page_object":  self._generate_java_page_object,
+            "detect_selenium_boot":       self._detect_selenium_boot,
             "generate_gherkin":           self._generate_gherkin,
             "generate_csharp_nunit":      self._generate_csharp_nunit,
             "generate_github_actions":    self._generate_github_actions,
@@ -248,6 +300,25 @@ class CodegenTools:
     async def _clear_session_log(self, args: dict) -> str:
         self.browser._session_log = []
         return "✅ Session log cleared."
+
+    async def _detect_selenium_boot(self, args: dict) -> str:
+        result = detect_selenium_boot(args.get("project_dir"))
+        if result["detected"]:
+            ev = "\n".join(f"  - {e}" for e in result["evidence"])
+            return (
+                "✅ Selenium Boot project DETECTED"
+                f" (root: {result['root']}).\n{ev}\n\n"
+                "Generate Java with framework=\"selenium_boot\" so the code uses the "
+                "framework's accessibility-first locators (getByRole / getByLabel / "
+                "getByTestId), framework-managed driver (BaseTest / BasePage, no "
+                "ChromeDriver setUp/tearDown) and web-first assertThat(...) assertions."
+            )
+        return (
+            "No Selenium Boot markers found near the working directory. "
+            "If this IS a Selenium Boot project, pass project_dir or generate with "
+            "framework=\"selenium_boot\" explicitly; otherwise use the plain "
+            "testng / junit5 flavors."
+        )
 
     # ------------------------------------------------------------------ #
     #  Python / pytest codegen                                             #
@@ -295,6 +366,8 @@ class {class_name}:
             sel = entry.get("selector", "")
             by_const = self._py_by(by)
 
+            if (action or "").startswith("assert_"):
+                continue  # assertions are emitted only in the Selenium Boot flavor
             if action == "start_browser":
                 lines.append(f"{indent}# Browser started — handled in setup_method")
             elif action == "navigate":
@@ -414,6 +487,15 @@ class {class_name}:
         log = self.browser._session_log
         test_name = args.get("test_name", "RecordedFlowTest")
         package = args.get("package_name", "com.tests.selenium")
+
+        if args.get("framework") == "selenium_boot":
+            return self._java_sb_inline_test(
+                test_name, package, log, base_class="BaseTest",
+                base_class_import="import com.seleniumboot.test.BaseTest;",
+                test_annotation="@Test",
+                test_annotation_import="import org.testng.annotations.Test;",
+                static_ctx=False, assert_api="testng")
+
         steps = self._log_to_java_steps(log)
 
         code = f'''package {package};
@@ -461,7 +543,7 @@ public class {test_name} {{
     }}
 }}
 '''
-        return code
+        return recommendation_banner(args.get("framework")) + code
 
     # ------------------------------------------------------------------ #
     #  Java JUnit 5 codegen                                                #
@@ -470,6 +552,17 @@ public class {test_name} {{
         log = self.browser._session_log
         test_name = args.get("test_name", "RecordedFlowTest")
         package = args.get("package_name", "com.tests.selenium")
+
+        if args.get("framework") == "selenium_boot":
+            # BaseJUnit5Test exposes $()/assertThat()/open() but NOT the getBy*
+            # factories, so inline locators use the static Locator.by* forms.
+            return self._java_sb_inline_test(
+                test_name, package, log, base_class="BaseJUnit5Test",
+                base_class_import="import com.seleniumboot.junit5.BaseJUnit5Test;",
+                test_annotation="@Test",
+                test_annotation_import="import org.junit.jupiter.api.Test;",
+                static_ctx=True, assert_api="junit5")
+
         steps = self._log_to_java_steps(log)
 
         code = f'''package {package};
@@ -517,17 +610,23 @@ public class {test_name} {{
     }}
 }}
 '''
-        return code
+        return recommendation_banner(args.get("framework")) + code
 
     def _log_to_java_steps(self, log: list) -> str:
         lines = []
         indent = "        "
+        # Unique local-variable names so repeated type/select actions don't
+        # redeclare `field` / `dropdown` (which fails to compile in Java).
+        n_field = 0
+        n_dropdown = 0
         for entry in log:
             action = entry.get("action")
             by = entry.get("by", "css")
             sel = entry.get("selector", "")
             by_java = self._java_by(by, sel)
 
+            if (action or "").startswith("assert_"):
+                continue  # assertions are emitted only in the Selenium Boot flavor
             if action == "start_browser":
                 lines.append(f"{indent}// Browser started — handled in setUp()")
             elif action == "navigate":
@@ -536,9 +635,11 @@ public class {test_name} {{
                 lines.append(f'{indent}wait.until(ExpectedConditions.elementToBeClickable({by_java})).click();')
             elif action == "type_text":
                 text = entry.get("text", "")
-                lines.append(f'{indent}WebElement field = wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}));')
-                lines.append(f'{indent}field.clear();')
-                lines.append(f'{indent}field.sendKeys("{text}");')
+                n_field += 1
+                field = "field" if n_field == 1 else f"field{n_field}"
+                lines.append(f'{indent}WebElement {field} = wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}));')
+                lines.append(f'{indent}{field}.clear();')
+                lines.append(f'{indent}{field}.sendKeys("{text}");')
             elif action == "hover":
                 lines.append(f'{indent}new Actions(driver).moveToElement(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}))).perform();')
             elif action == "double_click":
@@ -548,13 +649,15 @@ public class {test_name} {{
             elif action == "scroll_to_element":
                 lines.append(f'{indent}((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", wait.until(ExpectedConditions.presenceOfElementLocated({by_java})));')
             elif action == "select_option":
-                lines.append(f'{indent}Select dropdown = new Select(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java})));')
+                n_dropdown += 1
+                dropdown = "dropdown" if n_dropdown == 1 else f"dropdown{n_dropdown}"
+                lines.append(f'{indent}Select {dropdown} = new Select(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java})));')
                 if "by_text" in entry:
-                    lines.append(f'{indent}dropdown.selectByVisibleText("{entry["by_text"]}");')
+                    lines.append(f'{indent}{dropdown}.selectByVisibleText("{entry["by_text"]}");')
                 elif "by_value" in entry:
-                    lines.append(f'{indent}dropdown.selectByValue("{entry["by_value"]}");')
+                    lines.append(f'{indent}{dropdown}.selectByValue("{entry["by_value"]}");')
                 elif "by_index" in entry:
-                    lines.append(f'{indent}dropdown.selectByIndex({entry["by_index"]});')
+                    lines.append(f'{indent}{dropdown}.selectByIndex({entry["by_index"]});')
             elif action == "go_back":
                 lines.append(f"{indent}driver.navigate().back();")
             elif action == "go_forward":
@@ -665,6 +768,7 @@ public class {test_name} {{
 
         sep = "=" * 60
         return (
+            recommendation_banner(framework) +
             f"{sep}\n"
             f"File: {pages_package.replace('.', '/')}/{page_name}.java\n"
             f"{sep}\n"
@@ -988,7 +1092,7 @@ public class {test_name} {{
         """Field name — prefer a human-readable attribute (aria-label / testid /
         name / id) captured from the DOM; else fall back to the selector."""
         a = attrs or {}
-        for key in ("ariaLabel", "testid", "nameAttr", "idAttr"):
+        for key in ("ariaLabel", "label", "testid", "nameAttr", "idAttr"):
             val = (a.get(key) or "").strip()
             if val:
                 cleaned = re.sub(r"[-_](input|select|field|btn|button|dropdown|checkbox|radio)$",
@@ -1014,45 +1118,137 @@ public class {test_name} {{
             return "HEADING"
         return None
 
-    def _sb_locator_from_attrs(self, attrs: dict, by: str, selector: str) -> str:
+    # Factory names for the two calling contexts. Instance methods (getBy* / $)
+    # exist on BaseTest and BasePage; Cucumber step classes only have the static
+    # Locator.by* factories, so they must use static_ctx=True.
+    def _fac(self, kind: str, static_ctx: bool) -> str:
+        instance = {
+            "role": "getByRole", "text": "getByText", "label": "getByLabel",
+            "placeholder": "getByPlaceholder", "testid": "getByTestId",
+            "alt": "getByAltText", "title": "getByTitle",
+        }
+        static = {
+            "role": "Locator.byRole", "text": "Locator.byText", "label": "Locator.byLabel",
+            "placeholder": "Locator.byPlaceholder", "testid": "Locator.byTestId",
+            "alt": "Locator.byAltText", "title": "Locator.byTitle",
+        }
+        return (static if static_ctx else instance)[kind]
+
+    def _role_expr(self, role: str, name: str, static_ctx: bool, level=None) -> str:
+        q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+        if static_ctx:
+            expr = f'Locator.byRole(Role.{role}).withName("{q(name)}")'
+        else:
+            expr = f'getByRole(Role.{role}, "{q(name)}")'
+        if level:
+            expr += f".withLevel({level})"
+        return expr
+
+    def _by_wrap(self, by_expr: str, static_ctx: bool) -> str:
+        """$(By.x(...)) in instance context; Locator.of(By.x(...)) in static context."""
+        return f"Locator.of({by_expr})" if static_ctx else f"$({by_expr})"
+
+    def _css_wrap(self, css: str, static_ctx: bool) -> str:
+        q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+        return f'Locator.ofCss("{q(css)}")' if static_ctx else f'$("{q(css)}")'
+
+    def _sb_semantic_confidence(self, attrs: dict, by: str, selector: str) -> bool:
+        """True when the element has a single clearly-best, stable locator — an
+        accessibility-first one (role+name, label, placeholder, alt, title, text)
+        or a unique hook (testid, id). Such elements get a clean single Locator.
+
+        Deliberately excludes a bare ``name`` attribute: name alone is weaker, so
+        name-plus-structural-selector elements drop to the SmartLocator fallback."""
+        a = attrs or {}
+        if any((a.get(k) or "").strip() for k in
+               ("testid", "label", "placeholder", "alt", "title", "idAttr")):
+            return True
+        if self._role_enum_from(a) in ("BUTTON", "LINK", "HEADING") and \
+                (a.get("ariaLabel") or a.get("text") or a.get("title") or "").strip():
+            return True
+        if by in ("id", "link"):
+            return True
+        sel = (selector or "").strip()
+        if by == "css" and (re.fullmatch(r"#([\w-]+)", sel) or
+                            re.search(r"\[\s*(?:data-testid|placeholder|alt|title)\s*=", sel)):
+            return True
+        if by == "xpath" and re.search(
+                r"(?:text\(\)|normalize-space\(\)|@id|@aria-label|@title|@alt|@placeholder)", sel):
+            return True
+        return False
+
+    def _sb_candidate_bys(self, attrs: dict, by: str, selector: str) -> list:
+        """Ordered, de-duplicated list of raw By expressions for an element, used
+        by the SmartLocator fallback when no confident semantic locator exists.
+        Redundant candidates (e.g. a ``#id`` CSS selector when the id is already
+        present) are collapsed so smartFind only lists genuinely distinct tries."""
+        a = attrs or {}
+        q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
+        cands = []
+        namev = (a.get("nameAttr") or "").strip()
+        if namev:
+            cands.append(f'By.name("{q(namev)}")')
+        # Add the raw selector actually used, unless it just restates the name.
+        redundant = (
+            (by == "name" and selector == namev) or
+            (by == "css" and namev and re.fullmatch(
+                rf"\[\s*name\s*=\s*['\"]{re.escape(namev)}['\"]\s*\]", (selector or "").strip()))
+        )
+        if not redundant:
+            used = self._java_by(by, selector)
+            if used not in cands:
+                cands.append(used)
+        # de-dup, preserve order
+        seen, out = set(), []
+        for c in cands:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+    def _sb_locator_from_attrs(self, attrs: dict, by: str, selector: str,
+                               static_ctx: bool = False) -> str:
         """Accessibility-first Locator expression, prioritising the element's real
         DOM attributes (captured at interaction time) over the selector that was
         used to interact. Priority: data-testid > role+name (button/link/heading)
-        > placeholder > alt > title > id > name > selector-based inference."""
+        > label (form controls) > placeholder > alt > title > id > name >
+        selector-based inference."""
         a = attrs or {}
         q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
 
         testid = (a.get("testid") or "").strip()
         if testid:
-            return f'getByTestId("{q(testid)}")'
+            return f'{self._fac("testid", static_ctx)}("{q(testid)}")'
 
         role = self._role_enum_from(a)
         name = (a.get("ariaLabel") or a.get("text") or a.get("title") or "").strip()
         if role in ("BUTTON", "LINK", "HEADING") and name:
-            expr = f'getByRole(Role.{role}, "{q(name)}")'
             tag = (a.get("tag") or "")
-            if role == "HEADING" and re.fullmatch(r"h[1-6]", tag):
-                expr += f".withLevel({tag[1]})"
-            return expr
+            level = tag[1] if (role == "HEADING" and re.fullmatch(r"h[1-6]", tag)) else None
+            return self._role_expr(role, name, static_ctx, level)
 
-        for key, factory in (("placeholder", "getByPlaceholder"),
-                             ("alt", "getByAltText"),
-                             ("title", "getByTitle")):
+        # Associated <label> — the most robust locator for form controls.
+        label = (a.get("label") or "").strip()
+        if label:
+            return f'{self._fac("label", static_ctx)}("{q(label)}")'
+
+        for key in ("placeholder", "alt", "title"):
             val = (a.get(key) or "").strip()
             if val:
-                return f'{factory}("{q(val)}")'
+                fac = {"placeholder": "placeholder", "alt": "alt", "title": "title"}[key]
+                return f'{self._fac(fac, static_ctx)}("{q(val)}")'
 
         idv = (a.get("idAttr") or "").strip()
         if idv:
-            return f'$(By.id("{q(idv)}"))'
+            return self._by_wrap(f'By.id("{q(idv)}")', static_ctx)
         namev = (a.get("nameAttr") or "").strip()
         if namev:
-            return f'$(By.name("{q(namev)}"))'
+            return self._by_wrap(f'By.name("{q(namev)}")', static_ctx)
 
         # No usable attributes recorded (older sessions) — infer from the selector.
-        return self._sb_locator_expr(by, selector)
+        return self._sb_locator_expr(by, selector, static_ctx)
 
-    def _sb_locator_expr(self, by: str, selector: str) -> str:
+    def _sb_locator_expr(self, by: str, selector: str, static_ctx: bool = False) -> str:
         """Map a recorded (by, selector) to a Selenium Boot Locator expression.
 
         Prefers accessibility-first locators (getByRole/getByText/getByTestId/
@@ -1064,7 +1260,7 @@ public class {test_name} {{
         q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
 
         if by == "link":
-            return f'getByRole(Role.LINK, "{q(sel)}")'
+            return self._role_expr("LINK", sel, static_ctx)
 
         if by == "xpath":
             tm = re.search(r"(?:text\(\)|normalize-space\(\)|\.)\s*=\s*['\"]([^'\"]+)['\"]", sel)
@@ -1073,54 +1269,69 @@ public class {test_name} {{
             if tm:
                 txt = tm.group(1).strip()
                 if tag == "button" or re.search(r"@type=['\"](?:submit|button)['\"]", sel):
-                    return f'getByRole(Role.BUTTON, "{q(txt)}")'
+                    return self._role_expr("BUTTON", txt, static_ctx)
                 if tag == "a":
-                    return f'getByRole(Role.LINK, "{q(txt)}")'
+                    return self._role_expr("LINK", txt, static_ctx)
                 if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
-                    return f'getByRole(Role.HEADING, "{q(txt)}").withLevel({tag[1]})'
-                return f'getByText("{q(txt)}")'
+                    return self._role_expr("HEADING", txt, static_ctx, tag[1])
+                return f'{self._fac("text", static_ctx)}("{q(txt)}")'
             idm = re.search(r"@id=['\"]([^'\"]+)['\"]", sel)
             if idm:
-                return f'$(By.id("{q(idm.group(1))}"))'
-            return f'$(By.xpath("{q(sel)}"))'
+                return self._by_wrap(f'By.id("{q(idm.group(1))}")', static_ctx)
+            return self._by_wrap(f'By.xpath("{q(sel)}")', static_ctx)
 
         if by == "css":
-            for attr, factory in (("data-testid", "getByTestId"),
-                                  ("placeholder", "getByPlaceholder"),
-                                  ("alt", "getByAltText"),
-                                  ("title", "getByTitle")):
+            for attr, fac in (("data-testid", "testid"),
+                              ("placeholder", "placeholder"),
+                              ("alt", "alt"),
+                              ("title", "title")):
                 m = re.search(rf"\[\s*{attr}\s*=\s*['\"]([^'\"]+)['\"]\s*\]", sel)
                 if m:
-                    return f'{factory}("{q(m.group(1))}")'
+                    return f'{self._fac(fac, static_ctx)}("{q(m.group(1))}")'
 
             m = re.fullmatch(r"#([\w-]+)", sel)
             if m:
-                return f'$(By.id("{q(m.group(1))}"))'
-            return f'$("{q(sel)}")'
+                return self._by_wrap(f'By.id("{q(m.group(1))}")', static_ctx)
+            return self._css_wrap(sel, static_ctx)
 
         if by == "id":
-            return f'$(By.id("{q(sel)}"))'
+            return self._by_wrap(f'By.id("{q(sel)}")', static_ctx)
         if by == "name":
-            return f'$(By.name("{q(sel)}"))'
+            return self._by_wrap(f'By.name("{q(sel)}")', static_ctx)
         if by == "tag":
-            return f'$(By.tagName("{q(sel)}"))'
+            return self._by_wrap(f'By.tagName("{q(sel)}")', static_ctx)
         if by == "class":
-            return f'$(By.className("{q(sel)}"))'
-        return f'$(By.cssSelector("{q(sel)}"))'
+            return self._by_wrap(f'By.className("{q(sel)}")', static_ctx)
+        return self._by_wrap(f'By.cssSelector("{q(sel)}")', static_ctx)
 
     def _java_sb_page_class(self, page_name: str, package: str, elements: dict) -> str:
         """Page Object extending com.seleniumboot.test.BasePage.
 
-        Locators are accessibility-first (getByRole/getByText/getByTestId/...),
-        stored as Locator fields, with fluent action methods. Actions the Locator
-        API doesn't cover natively (double/right-click, select) bridge to BasePage
-        helpers via Locator.toBy().
+        Locators are accessibility-first (getByRole/getByLabel/getByText/
+        getByTestId/...), stored as Locator fields, with fluent action methods.
+        Actions the Locator API doesn't cover natively (double/right-click,
+        select) bridge to BasePage helpers via Locator.toBy().
+
+        When an element only has a brittle, structural selector (no accessible
+        name, testid, label, id, …) and more than one candidate strategy is
+        available, it falls back to a SmartLocator resolver that tries each
+        strategy in order — resilient to CSS/DOM refactors.
         """
         i = "    "
         i2 = i + i
 
+        # Decide per element: accessibility-first Locator field, or a low-confidence
+        # SmartLocator resolver (multiple By strategies tried in order).
+        for name, el in elements.items():
+            confident = self._sb_semantic_confidence(el.get("attrs"), el["by"], el["selector"])
+            cands = self._sb_candidate_bys(el.get("attrs"), el["by"], el["selector"])
+            el["_smart"] = (not confident) and len(cands) >= 2
+            el["_cands"] = cands
+
         field_lines = []
         for name, el in elements.items():
+            if el["_smart"]:
+                continue  # smart elements resolve via a private method, not a field
             field_lines.append(
                 f"{i}private final Locator {name} = "
                 f"{self._sb_locator_from_attrs(el.get('attrs'), el['by'], el['selector'])};"
@@ -1133,33 +1344,81 @@ public class {test_name} {{
             "",
         ]
 
+        # Private SmartLocator resolvers for low-confidence elements.
+        for name, el in elements.items():
+            if not el["_smart"]:
+                continue
+            args = ", ".join(el["_cands"])
+            body += [
+                f"{i}// Brittle selector — SmartLocator tries each strategy in order.",
+                f"{i}private WebElement {name}() {{",
+                f"{i2}return smartFind({args});",
+                f"{i}}}",
+                "",
+            ]
+
         for name, el in elements.items():
             cap = name[0].upper() + name[1:]
             acts = el["actions"]
-
+            smart = el["_smart"]
+            # How to refer to the element in an action:
+            #  - Locator field:   name.click(), name.type(...), name.toBy()
+            #  - Smart resolver:  name() -> WebElement, wrapped in Actions/Select/JS
             if "type_text" in acts:
-                body += [f"{i}public {page_name} enter{cap}(String text) {{",
-                         f"{i2}{name}.type(text);", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} enter{cap}(String text) {{",
+                             f"{i2}WebElement el = {name}();", f"{i2}el.clear();",
+                             f"{i2}el.sendKeys(text);", f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} enter{cap}(String text) {{",
+                             f"{i2}{name}.type(text);", f"{i2}return this;", f"{i}}}", ""]
             if "click" in acts:
+                target = f"{name}().click();" if smart else f"{name}.click();"
                 body += [f"{i}public {page_name} click{cap}() {{",
-                         f"{i2}{name}.click();", f"{i2}return this;", f"{i}}}", ""]
+                         f"{i2}{target}", f"{i2}return this;", f"{i}}}", ""]
             if "hover" in acts:
-                body += [f"{i}public {page_name} hover{cap}() {{",
-                         f"{i2}{name}.hover();", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} hover{cap}() {{",
+                             f"{i2}new Actions(driver).moveToElement({name}()).perform();",
+                             f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} hover{cap}() {{",
+                             f"{i2}{name}.hover();", f"{i2}return this;", f"{i}}}", ""]
             if "scroll_to_element" in acts:
-                body += [f"{i}public {page_name} scrollTo{cap}() {{",
-                         f"{i2}{name}.scrollIntoView();", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} scrollTo{cap}() {{",
+                             f'{i2}((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({{block:\'center\'}});", {name}());',
+                             f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} scrollTo{cap}() {{",
+                             f"{i2}{name}.scrollIntoView();", f"{i2}return this;", f"{i}}}", ""]
             if "double_click" in acts:
-                body += [f"{i}public {page_name} doubleClick{cap}() {{",
-                         f"{i2}doubleClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} doubleClick{cap}() {{",
+                             f"{i2}new Actions(driver).doubleClick({name}()).perform();",
+                             f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} doubleClick{cap}() {{",
+                             f"{i2}doubleClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
             if "right_click" in acts:
-                body += [f"{i}public {page_name} rightClick{cap}() {{",
-                         f"{i2}rightClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} rightClick{cap}() {{",
+                             f"{i2}new Actions(driver).contextClick({name}()).perform();",
+                             f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} rightClick{cap}() {{",
+                             f"{i2}rightClick({name}.toBy());", f"{i2}return this;", f"{i}}}", ""]
             if "select_option" in acts:
-                body += [f"{i}public {page_name} select{cap}ByText(String text) {{",
-                         f"{i2}selectByText({name}.toBy(), text);", f"{i2}return this;", f"{i}}}", "",
-                         f"{i}public {page_name} select{cap}ByValue(String value) {{",
-                         f"{i2}selectByValue({name}.toBy(), value);", f"{i2}return this;", f"{i}}}", ""]
+                if smart:
+                    body += [f"{i}public {page_name} select{cap}ByText(String text) {{",
+                             f"{i2}new Select({name}()).selectByVisibleText(text);", f"{i2}return this;", f"{i}}}", "",
+                             f"{i}public {page_name} select{cap}ByValue(String value) {{",
+                             f"{i2}new Select({name}()).selectByValue(value);", f"{i2}return this;", f"{i}}}", ""]
+                else:
+                    body += [f"{i}public {page_name} select{cap}ByText(String text) {{",
+                             f"{i2}selectByText({name}.toBy(), text);", f"{i2}return this;", f"{i}}}", "",
+                             f"{i}public {page_name} select{cap}ByValue(String value) {{",
+                             f"{i2}selectByValue({name}.toBy(), value);", f"{i2}return this;", f"{i}}}", ""]
 
         rendered = "\n".join(field_lines + body)
 
@@ -1172,6 +1431,14 @@ public class {test_name} {{
         if "By." in rendered:
             imports.append("import org.openqa.selenium.By;")
         imports.append("import org.openqa.selenium.WebDriver;")
+        if "WebElement " in rendered or "WebElement>" in rendered:
+            imports.append("import org.openqa.selenium.WebElement;")
+        if "new Actions(" in rendered:
+            imports.append("import org.openqa.selenium.interactions.Actions;")
+        if "JavascriptExecutor" in rendered:
+            imports.append("import org.openqa.selenium.JavascriptExecutor;")
+        if "new Select(" in rendered:
+            imports.append("import org.openqa.selenium.support.ui.Select;")
 
         lines = [f"package {package};", ""]
         lines += imports
@@ -1180,6 +1447,168 @@ public class {test_name} {{
         lines.append("")
         lines += body
         lines.append("}")
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------ #
+    #  Web-first assertion emission (assertThat)                           #
+    # ------------------------------------------------------------------ #
+    def _sb_assertion_lines(self, entry: dict, static_ctx: bool = False,
+                            assert_api: str = "testng") -> list:
+        """Map a recorded assert_* action to Selenium Boot web-first assertions
+        (assertThat(locator).isVisible()/.hasText()/...). Page/title/url checks
+        fall back to the JUnit/TestNG assertion API on the framework-managed driver.
+        Returns a list of Java statements (no indentation) or []."""
+        action = entry.get("action", "")
+        q = lambda s: (s or "").replace("\\", "\\\\").replace('"', '\\"')
+
+        # assertEquals argument order differs between the two APIs.
+        def eq(actual_expr, literal):
+            if assert_api == "junit5":
+                return f'org.junit.jupiter.api.Assertions.assertEquals("{literal}", {actual_expr});'
+            return f'org.testng.Assert.assertEquals({actual_expr}, "{literal}");'
+
+        def tru(cond, msg):
+            if assert_api == "junit5":
+                return f'org.junit.jupiter.api.Assertions.assertTrue({cond}, "{msg}");'
+            return f'org.testng.Assert.assertTrue({cond}, "{msg}");'
+
+        if action == "assert_title":
+            exp = q(entry.get("expected", ""))
+            if entry.get("exact"):
+                return [eq("getDriver().getTitle()", exp)]
+            return [tru(f'getDriver().getTitle().contains("{exp}")', f"page title should contain: {exp}")]
+        if action == "assert_url":
+            exp = q(entry.get("expected", ""))
+            if entry.get("exact"):
+                return [eq("getDriver().getCurrentUrl()", exp)]
+            return [tru(f'getDriver().getCurrentUrl().contains("{exp}")', f"url should contain: {exp}")]
+        if action == "assert_page_contains":
+            txt = q(entry.get("text", ""))
+            return [f'assertThat({self._fac("text", static_ctx)}("{txt}")).isVisible();']
+
+        loc = self._sb_locator_from_attrs(entry.get("attrs"), entry.get("by", "css"),
+                                          entry.get("selector", ""), static_ctx)
+        if action == "assert_visible":
+            return [f"assertThat({loc}).isVisible();"]
+        if action == "assert_hidden":
+            return [f"assertThat({loc}).isHidden();"]
+        if action == "assert_text":
+            exp = q(entry.get("expected", ""))
+            method = "hasText" if entry.get("exact") else "containsText"
+            return [f'assertThat({loc}).{method}("{exp}");']
+        if action == "assert_attribute":
+            attr = q(entry.get("attribute", ""))
+            exp = q(entry.get("expected", ""))
+            return [f'assertThat({loc}).hasAttribute("{attr}", "{exp}");']
+        if action == "assert_count":
+            try:
+                n = int(entry.get("expected_count", 0))
+            except (TypeError, ValueError):
+                n = 0
+            return [f"assertThat({loc}).count({n});"]
+        return []
+
+    def _sb_inline_statements(self, log: list, base_url: str,
+                              static_ctx: bool, assert_api: str) -> list:
+        """Build the statements for a single self-contained Selenium Boot @Test /
+        step body — inline accessibility-first locators, no page object. Used by
+        the TestNG / JUnit 5 / Cucumber selenium_boot flavors. Actions the Locator
+        API lacks (double/right-click, select) bridge through Locator.element()."""
+        q = lambda s: (s or "").replace("\\", "\\\\").replace('"', '\\"')
+        out = []
+        for entry in log:
+            action = entry.get("action", "")
+            by = entry.get("by", "css")
+            sel = entry.get("selector", "")
+
+            if action == "start_browser":
+                continue
+            if action == "navigate":
+                url = entry.get("url", "")
+                if base_url and (url == base_url or self._same_origin(url, base_url)):
+                    out.append(f'open("{self._url_path(url)}");')
+                elif url:
+                    out.append(f'getDriver().get("{q(url)}");')
+                continue
+            if action.startswith("assert_"):
+                out += self._sb_assertion_lines(entry, static_ctx=static_ctx, assert_api=assert_api)
+                continue
+            if action == "go_back":
+                out.append("getDriver().navigate().back();"); continue
+            if action == "go_forward":
+                out.append("getDriver().navigate().forward();"); continue
+            if action == "refresh":
+                out.append("getDriver().navigate().refresh();"); continue
+
+            loc = self._sb_locator_from_attrs(entry.get("attrs"), by, sel, static_ctx)
+            if action == "type_text":
+                out.append(f'{loc}.type("{q(entry.get("text", ""))}");')
+            elif action == "click":
+                out.append(f"{loc}.click();")
+            elif action == "hover":
+                out.append(f"{loc}.hover();")
+            elif action == "scroll_to_element":
+                out.append(f"{loc}.scrollIntoView();")
+            elif action == "double_click":
+                out.append(f"new Actions(getDriver()).doubleClick({loc}.element()).perform();")
+            elif action == "right_click":
+                out.append(f"new Actions(getDriver()).contextClick({loc}.element()).perform();")
+            elif action == "select_option":
+                if "by_text" in entry:
+                    out.append(f'new Select({loc}.element()).selectByVisibleText("{q(entry["by_text"])}");')
+                elif "by_value" in entry:
+                    out.append(f'new Select({loc}.element()).selectByValue("{q(entry["by_value"])}");')
+                elif "by_index" in entry:
+                    out.append(f'new Select({loc}.element()).selectByIndex({entry["by_index"]});')
+        return out
+
+    def _sb_inline_imports(self, rendered: str, base_class_import: str,
+                           test_annotation_import: str, static_ctx: bool) -> list:
+        """Assemble the import block for an inline Selenium Boot test/steps class
+        by scanning the rendered body for the tokens that need each import."""
+        imports = [base_class_import]
+        if static_ctx and ("Locator." in rendered):
+            imports.append("import com.seleniumboot.locator.Locator;")
+        if "Role." in rendered:
+            imports.append("import com.seleniumboot.locator.Role;")
+        if "By." in rendered:
+            imports.append("import org.openqa.selenium.By;")
+        if "new Actions(" in rendered:
+            imports.append("import org.openqa.selenium.interactions.Actions;")
+        if "new Select(" in rendered:
+            imports.append("import org.openqa.selenium.support.ui.Select;")
+        if test_annotation_import:
+            imports.append(test_annotation_import)
+        return imports
+
+    def _java_sb_inline_test(self, test_name: str, package: str, log: list,
+                             base_class: str, base_class_import: str,
+                             test_annotation: str, test_annotation_import: str,
+                             static_ctx: bool, assert_api: str) -> str:
+        """A single self-contained Selenium Boot test class (no page object) —
+        extends BaseTest / BaseJUnit5Test, inline accessibility-first locators and
+        web-first assertions, framework-managed driver (no setUp/tearDown)."""
+        i = "    "
+        base_url = next((e.get("url") for e in log if e.get("action") == "navigate"), "")
+        stmts = self._sb_inline_statements(log, base_url, static_ctx, assert_api)
+        if not stmts:
+            stmts = ["// No actions recorded"]
+        body = "\n".join(f"{i}{i}{s}" for s in stmts)
+
+        imports = self._sb_inline_imports(body, base_class_import,
+                                          test_annotation_import, static_ctx)
+        lines = [f"package {package};", ""]
+        lines += imports
+        lines += [
+            "",
+            f"public class {test_name} extends {base_class} {{",
+            "",
+            f"{i}{test_annotation}",
+            f"{i}public void recordedFlowTest() {{",
+            body,
+            f"{i}}}",
+            "}",
+        ]
         return "\n".join(lines)
 
     def _java_sb_test(self, test_name, package, pages_package, page_name,
@@ -1194,61 +1623,75 @@ public class {test_name} {{
         i = "    "
         key_to_name = {(v["selector"], v["by"]): n for n, v in elements.items()}
 
-        lines = [
-            f"package {package};",
-            "",
+        body_lines = []
+        if base_url:
+            body_lines.append(f"{i}{i}// baseUrl (execution.baseUrl in selenium-boot.yml) should be the site origin")
+            body_lines.append(f'{i}{i}open("{self._url_path(base_url)}");')
+        body_lines.append(f"{i}{i}{page_name} page = new {page_name}(getDriver());")
+
+        for entry in log:
+            action = entry.get("action", "")
+            sel = entry.get("selector", "")
+            by = entry.get("by", "css")
+            name = key_to_name.get((sel, by))
+
+            if action.startswith("assert_"):
+                # Web-first assertions run inline in the test (BaseTest exposes
+                # assertThat / getBy* / $); page objects hold actions, not assertions.
+                for stmt in self._sb_assertion_lines(entry, static_ctx=False):
+                    body_lines.append(f"{i}{i}{stmt}")
+            elif action == "navigate" and entry.get("url") != base_url:
+                url = entry["url"]
+                if self._same_origin(url, base_url):
+                    body_lines.append(f'{i}{i}open("{self._url_path(url)}");')
+                else:
+                    body_lines.append(f'{i}{i}getDriver().get("{url}");')
+            elif action == "go_back":
+                body_lines.append(f"{i}{i}getDriver().navigate().back();")
+            elif action == "go_forward":
+                body_lines.append(f"{i}{i}getDriver().navigate().forward();")
+            elif action == "refresh":
+                body_lines.append(f"{i}{i}getDriver().navigate().refresh();")
+            elif name:
+                cap = name[0].upper() + name[1:]
+                if action == "type_text":
+                    body_lines.append(f'{i}{i}page.enter{cap}("{entry.get("text", "")}");')
+                elif action == "click":
+                    body_lines.append(f"{i}{i}page.click{cap}();")
+                elif action == "hover":
+                    body_lines.append(f"{i}{i}page.hover{cap}();")
+                elif action == "double_click":
+                    body_lines.append(f"{i}{i}page.doubleClick{cap}();")
+                elif action == "scroll_to_element":
+                    body_lines.append(f"{i}{i}page.scrollTo{cap}();")
+                elif action == "select_option":
+                    meta = elements[name]["meta"]
+                    if meta.get("select_key") == "by_text":
+                        body_lines.append(f'{i}{i}page.select{cap}ByText("{meta["select_val"]}");')
+                    else:
+                        body_lines.append(f'{i}{i}page.select{cap}ByValue("{meta.get("select_val", "")}");')
+
+        rendered = "\n".join(body_lines)
+        imports = [
             f"import {pages_package}.{page_name};",
             "import com.seleniumboot.test.BaseTest;",
-            "import org.testng.annotations.Test;",
+        ]
+        if "Role." in rendered:
+            imports.append("import com.seleniumboot.locator.Role;")
+        if "By." in rendered:
+            imports.append("import org.openqa.selenium.By;")
+        imports.append("import org.testng.annotations.Test;")
+
+        lines = [f"package {package};", ""]
+        lines += imports
+        lines += [
             "",
             f"public class {test_name} extends BaseTest {{",
             "",
             f"{i}@Test",
             f"{i}public void recordedFlowTest() {{",
         ]
-
-        if base_url:
-            lines.append(f"{i}{i}// baseUrl (execution.baseUrl in selenium-boot.yml) should be the site origin")
-            lines.append(f'{i}{i}open("{self._url_path(base_url)}");')
-        lines.append(f"{i}{i}{page_name} page = new {page_name}(getDriver());")
-
-        for entry in log:
-            action = entry.get("action")
-            sel = entry.get("selector", "")
-            by = entry.get("by", "css")
-            name = key_to_name.get((sel, by))
-
-            if action == "navigate" and entry.get("url") != base_url:
-                url = entry["url"]
-                if self._same_origin(url, base_url):
-                    lines.append(f'{i}{i}open("{self._url_path(url)}");')
-                else:
-                    lines.append(f'{i}{i}getDriver().get("{url}");')
-            elif action == "go_back":
-                lines.append(f"{i}{i}getDriver().navigate().back();")
-            elif action == "go_forward":
-                lines.append(f"{i}{i}getDriver().navigate().forward();")
-            elif action == "refresh":
-                lines.append(f"{i}{i}getDriver().navigate().refresh();")
-            elif name:
-                cap = name[0].upper() + name[1:]
-                if action == "type_text":
-                    lines.append(f'{i}{i}page.enter{cap}("{entry.get("text", "")}");')
-                elif action == "click":
-                    lines.append(f"{i}{i}page.click{cap}();")
-                elif action == "hover":
-                    lines.append(f"{i}{i}page.hover{cap}();")
-                elif action == "double_click":
-                    lines.append(f"{i}{i}page.doubleClick{cap}();")
-                elif action == "scroll_to_element":
-                    lines.append(f"{i}{i}page.scrollTo{cap}();")
-                elif action == "select_option":
-                    meta = elements[name]["meta"]
-                    if meta.get("select_key") == "by_text":
-                        lines.append(f'{i}{i}page.select{cap}ByText("{meta["select_val"]}");')
-                    else:
-                        lines.append(f'{i}{i}page.select{cap}ByValue("{meta.get("select_val", "")}");')
-
+        lines += body_lines
         lines += [f"{i}}}", "}"]
         return "\n".join(lines)
 
@@ -1272,10 +1715,14 @@ public class {test_name} {{
         key_to_name = {(v["selector"], v["by"]): n for n, v in elements.items()}
 
         feature = self._gherkin_feature(feature_name, scenario, log, key_to_name)
-        steps = self._gherkin_steps(steps_class, steps_package, log, elements, key_to_name)
+        if args.get("framework") == "selenium_boot":
+            steps = self._gherkin_steps_sb(steps_class, steps_package, log, elements, key_to_name)
+        else:
+            steps = self._gherkin_steps(steps_class, steps_package, log, elements, key_to_name)
 
         sep = "=" * 60
         return (
+            recommendation_banner(args.get("framework")) +
             f"{sep}\n"
             f"File: src/test/resources/features/{feature_file}\n"
             f"{sep}\n"
@@ -1492,6 +1939,147 @@ public class {test_name} {{
         body = f"\n\n".join(methods) if methods else f"{i}// No steps recorded"
         return header + body + "\n\n}"
 
+    def _gherkin_steps_sb(self, class_name: str, package: str, log: list,
+                          elements: dict, key_to_name: dict) -> str:
+        """Selenium Boot Cucumber step definitions — extends BaseCucumberSteps
+        (framework-managed driver, no @Before/@After), accessibility-first
+        locators via the static Locator.by* factories and web-first assertThat.
+        Step phrasings match those emitted into the .feature file exactly."""
+        i = "    "
+        seen = set()
+        methods = []
+
+        def loc_for(name, entry):
+            el = elements.get(name)
+            if el:
+                return self._sb_locator_from_attrs(el.get("attrs"), el["by"], el["selector"], static_ctx=True)
+            return self._sb_locator_expr(entry.get("by", "css"), entry.get("selector", ""), static_ctx=True)
+
+        for entry in log:
+            action = entry.get("action")
+            if action == "start_browser":
+                continue
+            sel = entry.get("selector", "")
+            by = entry.get("by", "css")
+            name = key_to_name.get((sel, by), self._selector_to_name(sel, by))
+            readable = self._name_to_readable(name)
+
+            if action == "navigate":
+                if "navigate" not in seen:
+                    seen.add("navigate")
+                    methods.append(
+                        f'{i}@Given("I navigate to {{string}}")\n'
+                        f'{i}public void iNavigateTo(String url) {{\n'
+                        f'{i}{i}getDriver().get(url);\n'
+                        f'{i}}}'
+                    )
+            elif action == "type_text":
+                key = f"enter_{name}"
+                if key not in seen:
+                    seen.add(key)
+                    method = self._to_camel(f"i_enter_in_{name}")
+                    methods.append(
+                        f'{i}@And("I enter {{string}} in the {readable}")\n'
+                        f'{i}public void {method}(String text) {{\n'
+                        f'{i}{i}{loc_for(name, entry)}.type(text);\n'
+                        f'{i}}}'
+                    )
+            elif action == "click":
+                key = f"click_{name}"
+                if key not in seen:
+                    seen.add(key)
+                    method = self._to_camel(f"i_click_the_{name}")
+                    methods.append(
+                        f'{i}@And("I click the {readable}")\n'
+                        f'{i}public void {method}() {{\n'
+                        f'{i}{i}{loc_for(name, entry)}.click();\n'
+                        f'{i}}}'
+                    )
+            elif action == "hover":
+                key = f"hover_{name}"
+                if key not in seen:
+                    seen.add(key)
+                    method = self._to_camel(f"i_hover_over_the_{name}")
+                    methods.append(
+                        f'{i}@And("I hover over the {readable}")\n'
+                        f'{i}public void {method}() {{\n'
+                        f'{i}{i}{loc_for(name, entry)}.hover();\n'
+                        f'{i}}}'
+                    )
+            elif action == "double_click":
+                key = f"dclick_{name}"
+                if key not in seen:
+                    seen.add(key)
+                    method = self._to_camel(f"i_double_click_the_{name}")
+                    methods.append(
+                        f'{i}@And("I double-click the {readable}")\n'
+                        f'{i}public void {method}() {{\n'
+                        f'{i}{i}new Actions(getDriver()).doubleClick({loc_for(name, entry)}.element()).perform();\n'
+                        f'{i}}}'
+                    )
+            elif action == "select_option":
+                key = f"select_{name}"
+                if key not in seen:
+                    seen.add(key)
+                    method = self._to_camel(f"i_select_from_the_{name}")
+                    methods.append(
+                        f'{i}@And("I select {{string}} from the {readable}")\n'
+                        f'{i}public void {method}(String value) {{\n'
+                        f'{i}{i}new Select({loc_for(name, entry)}.element()).selectByVisibleText(value);\n'
+                        f'{i}}}'
+                    )
+            elif action == "go_back":
+                if "go_back" not in seen:
+                    seen.add("go_back")
+                    methods.append(
+                        f'{i}@And("I navigate back")\n'
+                        f'{i}public void iNavigateBack() {{\n'
+                        f'{i}{i}getDriver().navigate().back();\n'
+                        f'{i}}}'
+                    )
+            elif action == "go_forward":
+                if "go_forward" not in seen:
+                    seen.add("go_forward")
+                    methods.append(
+                        f'{i}@And("I navigate forward")\n'
+                        f'{i}public void iNavigateForward() {{\n'
+                        f'{i}{i}getDriver().navigate().forward();\n'
+                        f'{i}}}'
+                    )
+            elif action == "refresh":
+                if "refresh" not in seen:
+                    seen.add("refresh")
+                    methods.append(
+                        f'{i}@And("I refresh the page")\n'
+                        f'{i}public void iRefreshThePage() {{\n'
+                        f'{i}{i}getDriver().navigate().refresh();\n'
+                        f'{i}}}'
+                    )
+
+        body = f"\n\n".join(methods) if methods else f"{i}// No steps recorded"
+        rendered = body
+
+        imports = [
+            "import com.seleniumboot.cucumber.BaseCucumberSteps;",
+            "import com.seleniumboot.locator.Locator;",
+        ]
+        if "Role." in rendered:
+            imports.append("import com.seleniumboot.locator.Role;")
+        if "By." in rendered:
+            imports.append("import org.openqa.selenium.By;")
+        if "new Actions(" in rendered:
+            imports.append("import org.openqa.selenium.interactions.Actions;")
+        if "new Select(" in rendered:
+            imports.append("import org.openqa.selenium.support.ui.Select;")
+        imports.append("import io.cucumber.java.en.*;")
+
+        header = "\n".join([f"package {package};", ""] + imports + [
+            "",
+            f"public class {class_name} extends BaseCucumberSteps {{",
+            "",
+        ])
+        return header + body + "\n\n}"
+
     # ------------------------------------------------------------------ #
     #  C# NUnit codegen                                                    #
     # ------------------------------------------------------------------ #
@@ -1546,12 +2134,18 @@ namespace {namespace}
     def _log_to_csharp_steps(self, log: list) -> str:
         lines = []
         indent = "            "
+        # Unique local names so repeated type/select actions don't redeclare
+        # `field` / `dropdown` (a compile error in C#).
+        n_field = 0
+        n_dropdown = 0
         for entry in log:
             action = entry.get("action")
             by = entry.get("by", "css")
             sel = entry.get("selector", "")
             by_cs = self._csharp_by(by, sel)
 
+            if (action or "").startswith("assert_"):
+                continue  # assertions are emitted only in the Selenium Boot flavor
             if action == "start_browser":
                 lines.append(f"{indent}// Browser started — handled in SetUp()")
             elif action == "navigate":
@@ -1560,9 +2154,11 @@ namespace {namespace}
                 lines.append(f'{indent}wait.Until(ExpectedConditions.ElementToBeClickable({by_cs})).Click();')
             elif action == "type_text":
                 text = entry.get("text", "")
-                lines.append(f'{indent}var field = wait.Until(ExpectedConditions.ElementIsVisible({by_cs}));')
-                lines.append(f'{indent}field.Clear();')
-                lines.append(f'{indent}field.SendKeys("{text}");')
+                n_field += 1
+                field = "field" if n_field == 1 else f"field{n_field}"
+                lines.append(f'{indent}var {field} = wait.Until(ExpectedConditions.ElementIsVisible({by_cs}));')
+                lines.append(f'{indent}{field}.Clear();')
+                lines.append(f'{indent}{field}.SendKeys("{text}");')
             elif action == "hover":
                 lines.append(f'{indent}new Actions(driver).MoveToElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))).Perform();')
             elif action == "double_click":
@@ -1570,13 +2166,15 @@ namespace {namespace}
             elif action == "right_click":
                 lines.append(f'{indent}new Actions(driver).ContextClick(wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))).Perform();')
             elif action == "select_option":
-                lines.append(f'{indent}var dropdown = new SelectElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs})));')
+                n_dropdown += 1
+                dropdown = "dropdown" if n_dropdown == 1 else f"dropdown{n_dropdown}"
+                lines.append(f'{indent}var {dropdown} = new SelectElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs})));')
                 if "by_text" in entry:
-                    lines.append(f'{indent}dropdown.SelectByText("{entry["by_text"]}");')
+                    lines.append(f'{indent}{dropdown}.SelectByText("{entry["by_text"]}");')
                 elif "by_value" in entry:
-                    lines.append(f'{indent}dropdown.SelectByValue("{entry["by_value"]}");')
+                    lines.append(f'{indent}{dropdown}.SelectByValue("{entry["by_value"]}");')
                 elif "by_index" in entry:
-                    lines.append(f'{indent}dropdown.SelectByIndex({entry["by_index"]});')
+                    lines.append(f'{indent}{dropdown}.SelectByIndex({entry["by_index"]});')
             elif action == "scroll_to_element":
                 lines.append(f'{indent}((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView(true);", wait.Until(ExpectedConditions.ElementExists({by_cs})));')
             elif action == "send_keys":
@@ -1836,6 +2434,8 @@ test("{test_name}", async ({{ page }}) => {{
             sel = entry.get("selector", "")
             loc = f'page.locator("{sel}")' if sel else ""
 
+            if (action or "").startswith("assert_"):
+                continue  # assertions are emitted only in the Selenium Boot flavor
             if action == "start_browser":
                 lines.append(f"{indent}// Browser handled by Playwright test runner")
             elif action == "navigate":

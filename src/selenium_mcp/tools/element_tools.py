@@ -12,6 +12,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from mcp.types import Tool
 from selenium_mcp.tools._locators import BY_MAP
+from selenium_mcp.tools._attrs import semantic_attrs
 
 _SPECIAL_KEYS: dict[str, str] = {
     "tab": Keys.TAB, "enter": Keys.RETURN, "escape": Keys.ESCAPE,
@@ -545,29 +546,9 @@ class ElementTools:
     def _semantic_attrs(self, el) -> dict:
         """Snapshot an element's accessibility-relevant attributes at interaction
         time, so codegen can prefer advanced locators (getByTestId / getByRole /
-        getByPlaceholder / ...) no matter which selector was used to interact.
-        One JS round-trip; best-effort — never raises."""
-        try:
-            return self.browser.get_driver().execute_script(
-                """
-                const e = arguments[0];
-                return {
-                  tag: e.tagName ? e.tagName.toLowerCase() : '',
-                  type: (e.getAttribute('type') || '').toLowerCase(),
-                  testid: e.getAttribute('data-testid') || e.getAttribute('data-test-id')
-                          || e.getAttribute('data-test') || e.getAttribute('data-cy') || '',
-                  role: e.getAttribute('role') || '',
-                  ariaLabel: e.getAttribute('aria-label') || '',
-                  placeholder: e.getAttribute('placeholder') || '',
-                  alt: e.getAttribute('alt') || '',
-                  title: e.getAttribute('title') || '',
-                  idAttr: e.getAttribute('id') || '',
-                  nameAttr: e.getAttribute('name') || '',
-                  text: (e.textContent || '').trim().slice(0, 80)
-                };
-                """, el) or {}
-        except Exception:
-            return {}
+        getByLabel / getByPlaceholder / ...) no matter which selector was used to
+        interact. One JS round-trip; best-effort — never raises."""
+        return semantic_attrs(self.browser.get_driver(), el)
 
     async def _find_element(self, args: dict) -> str:
         el = self._find(args["selector"], args.get("by", "css"), args.get("timeout", 10))
