@@ -682,34 +682,37 @@ class ElementTools:
         """Fill a single element; return a short summary line."""
         tag = el.tag_name.lower()
         input_type = (el.get_attribute("type") or "text").lower()
+        # Snapshot accessibility attributes so codegen prefers getByLabel /
+        # getByRole / getByTestId — same as the individual interaction tools.
+        attrs = self._semantic_attrs(el)
 
         if tag == "select":
             sel_obj = Select(el)
             try:
                 sel_obj.select_by_visible_text(value)
-                self.browser.record("select_option", selector=selector, by=by, by_text=value)
+                self.browser.record("select_option", selector=selector, by=by, by_text=value, attrs=attrs)
             except Exception:
                 sel_obj.select_by_value(value)
-                self.browser.record("select_option", selector=selector, by=by, by_value=value)
+                self.browser.record("select_option", selector=selector, by=by, by_value=value, attrs=attrs)
             return f"  select  {selector!r} → '{value}'"
 
         elif input_type == "checkbox":
             want = value.strip().lower() in ("true", "1", "yes", "on", "checked")
             if el.is_selected() != want:
                 el.click()
-                self.browser.record("click", selector=selector, by=by)
+                self.browser.record("click", selector=selector, by=by, attrs=attrs)
             state = "checked" if want else "unchecked"
             return f"  checkbox {selector!r} → {state}"
 
         elif input_type == "radio":
             if not el.is_selected():
                 el.click()
-                self.browser.record("click", selector=selector, by=by)
+                self.browser.record("click", selector=selector, by=by, attrs=attrs)
             return f"  radio   {selector!r} → selected"
 
         elif input_type == "file":
             el.send_keys(value)
-            self.browser.record("upload_file", selector=selector, by=by, file_path=value)
+            self.browser.record("upload_file", selector=selector, by=by, file_path=value, attrs=attrs)
             return f"  file    {selector!r} → '{value}'"
 
         else:
@@ -717,7 +720,7 @@ class ElementTools:
             el.send_keys(value)
             sel_lower = selector.lower()
             logged = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else value
-            self.browser.record("type_text", selector=selector, by=by, text=logged)
+            self.browser.record("type_text", selector=selector, by=by, text=logged, attrs=attrs)
             return f"  input   {selector!r} → '{logged}'"
 
     async def _fill_form(self, args: dict) -> str:
@@ -740,8 +743,10 @@ class ElementTools:
 
         if submit_sel:
             try:
-                self._find_clickable(submit_sel, by, timeout).click()
-                self.browser.record("click", selector=submit_sel, by=by)
+                submit_el = self._find_clickable(submit_sel, by, timeout)
+                submit_attrs = self._semantic_attrs(submit_el)
+                submit_el.click()
+                self.browser.record("click", selector=submit_sel, by=by, attrs=submit_attrs)
                 results.append(f"  submit  {submit_sel!r} → clicked")
             except Exception as e:
                 errors.append(f"  ❌ submit {submit_sel!r}: {e}")

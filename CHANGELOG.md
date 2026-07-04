@@ -3,6 +3,16 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1]
+
+### Fixed
+- `fill_form` now snapshots each field's accessibility attributes (label / role /
+  test-id), same as the individual `type_text` / `click` tools. Previously,
+  filling a form via `fill_form` recorded no attributes, so generated Selenium
+  Boot code fell back to structural `$(By.id(...))` locators instead of the
+  accessibility-first `getByLabel` / `getByRole`. A11y-first locators are now the
+  default regardless of how the form is filled — no special prompt required.
+
 ## [0.4.0]
 
 Framework-native code generation for [Selenium Boot](https://github.com/seleniumboot/selenium-boot) — when the MCP is used inside a Selenium Boot project it now emits idiomatic, accessibility-first framework code instead of raw Selenium.
