@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>io.github.seleniumboot.mcp</id>
-    <name>Selenium Boot MCP - AI Browser Automation</name>
-    <version>0.4.1</version>
+    <!-- name and version are supplied by Gradle (pluginConfiguration in build.gradle.kts,
+         driven by gradle.properties) and patched into this file at build time. -->
     <vendor url="https://github.com/seleniumboot" email="seleniumboot.dev@gmail.com">Selenium Boot</vendor>
 
     <description><![CDATA[
