@@ -1,0 +1,81 @@
+name: Smoke test (published package)
+
+# Installs seleniumboot-mcp from PyPI exactly as a user would and checks it can
+# actually start. This exists because mcp 2.0.0 (2026-07-28) removed the
+# decorators server.py registers its tools with, and the unbounded dependency
+# meant every fresh install crashed at import — for 25 days, unnoticed, until a
+# user reported it (#2).
+#
+# Deliberately does NOT check out the repo: the point is to test the published
+# artifact and its real dependency resolution. A checkout would put src/ on the
+# path and could mask a broken release.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/smoke.yml'
+
+jobs:
+  smoke:
+    name: py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12', '3.13']
+
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install from PyPI
+        run: pip install --no-cache-dir seleniumboot-mcp
+
+      - name: Report resolved versions
+        run: pip list | grep -Ei '^(mcp|selenium|seleniumboot)'
+
+      - name: Import and register tools
+        run: |
+          python - <<'PY'
+          import asyncio, sys
+          from importlib.metadata import version
+
+          from selenium_mcp import server
+
+          print("seleniumboot-mcp:", version("seleniumboot-mcp"))
+          print("mcp:", version("mcp"))
+
+          tools = asyncio.run(server.list_tools())
+          handlers = server.TOOL_HANDLERS
+          names = {t.name for t in tools}
+
+          print(f"tools={len(tools)} handlers={len(handlers)}")
+
+          failures = []
+          if not tools:
+              failures.append("no tools registered")
+          unhandled = sorted(names - handlers.keys())
+          if unhandled:
+              failures.append(f"tools with no handler: {unhandled}")
+          orphaned = sorted(handlers.keys() - names)
+          if orphaned:
+              failures.append(f"handlers with no tool: {orphaned}")
+
+          if failures:
+              for f in failures:
+                  print("FAIL:", f, file=sys.stderr)
+              sys.exit(1)
+
+          print("OK")
+          PY
+
+      - name: Entry point starts
+        run: |
+          # stdio server: EOF on stdin is a clean shutdown. A crash (e.g. the
+          # AttributeError from #2) exits non-zero and fails here.
+          seleniumboot-mcp < /dev/null
+          echo "entry point exited cleanly"
