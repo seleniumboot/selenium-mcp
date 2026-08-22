@@ -3,6 +3,18 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.2]
+
+### Fixed
+- **The package no longer installs against an `mcp` SDK it cannot run on.** The
+  dependency was declared `mcp>=1.0.0` with no upper bound, so once `mcp` 2.0.0
+  went stable (2026-07-28) every fresh `pip` / `uv` install resolved to it — and
+  2.0.0 removed the `Server.list_tools` / `Server.call_tool` decorators this
+  server registers all 85 tools with. The result was an `AttributeError` at
+  import time: the entry point died before a single tool was registered, with no
+  workaround available. The dependency is now bounded `mcp>=1.0.0,<2.0.0`.
+  Migrating to the 2.0 API is tracked separately. (Fixes #2)
+
 ## [0.4.1]
 
 ### Fixed

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seleniumboot-mcp"
-version = "0.4.1"
+version = "0.4.2"
 description = "A Python MCP server for Selenium WebDriver — 85 tools for browser automation, alerts, frames, shadow DOM, cookies, mobile emulation, self-healing locators, and codegen for Java/C#/Python/Playwright/CI pipelines"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    # Upper bound is load-bearing: mcp 2.0.0 removed the Server.list_tools /
+    # Server.call_tool decorators this server registers its tools with (#2).
+    # Do not relax it without migrating server.py to the 2.0 API.
+    "mcp>=1.0.0,<2.0.0",
     "selenium>=4.6.0",
 ]
 
