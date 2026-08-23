@@ -21,14 +21,26 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    # server.py was migrated to the mcp 2.0 API in 0.5.0 — the decorators this
-    # server used to register with (Server.list_tools / Server.call_tool) were
-    # removed in 2.0.0 and are gone for good (#2). 1.x is therefore no longer
-    # supported: the floor, not a ceiling, is what's load-bearing now.
-    # An upper bound goes back the moment mcp 3.0 is on the horizon —
-    # Dependabot opens that PR (.github/dependabot.yml); do not merge it
-    # without running the selenium-mcp-test gate first.
-    "mcp>=2.0.0",
+    # Both bounds are load-bearing, and for different reasons.
+    #
+    # Floor: server.py speaks the mcp 2.0 API as of 0.5.0 — the decorators it
+    # used to register with (Server.list_tools / Server.call_tool) were removed
+    # in 2.0.0, so 1.x cannot run this code at all (#2).
+    #
+    # Ceiling: this is the bound whose absence caused #2, and it is NOT
+    # temporary. Two things depend on it:
+    #   1. Users never silently resolve to a major that removed our API. That
+    #      is the 25-day outage, exactly.
+    #   2. It is what makes dependency alerting work. Dependabot only opens a
+    #      PR when the constraint *excludes* the new release; against an open
+    #      `>=` it has nothing to say and stays silent. Verified 2026-08-23 —
+    #      the first pip run against an unbounded `mcp>=2.0.0` completed
+    #      successfully and opened zero PRs.
+    #
+    # So when mcp 3.0 ships, Dependabot proposes widening this line, and that
+    # PR *is* the alert. Do not merge it without running the selenium-mcp-test
+    # gate against the new major first.
+    "mcp>=2.0.0,<3.0.0",
     "selenium>=4.6.0",
 ]
 

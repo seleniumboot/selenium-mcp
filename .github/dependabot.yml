@@ -9,6 +9,13 @@
 # The pip ecosystem watches pyproject.toml. When mcp 3.0.0 lands, Dependabot
 # opens a PR widening the pin — that PR is the alert. Do not auto-merge it:
 # widening the pin is exactly the change that needs the release gate run first.
+#
+# This only works while pyproject.toml keeps an UPPER bound on mcp. Dependabot
+# raises a PR when a new release falls outside the declared constraint; against
+# an open `>=` it sees nothing to do and says nothing. Confirmed the hard way on
+# 2026-08-23: with an unbounded `mcp>=2.0.0` the first pip run opened zero PRs
+# while the github-actions run opened three. If the ceiling is ever removed,
+# this file stops being alerting and becomes decoration.
 version: 2
 updates:
   - package-ecosystem: "pip"
