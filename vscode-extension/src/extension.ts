@@ -51,7 +51,13 @@ function writeMcpEntry(filePath: string, command: string): boolean {
         }
         let settings: Record<string, unknown> = {};
         if (fs.existsSync(filePath)) {
-            try { settings = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { /* start fresh */ }
+            try {
+                settings = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            } catch {
+                // The file exists but isn't valid JSON — it may be hand-edited or
+                // commented out on purpose. Leave it alone rather than overwriting.
+                return false;
+            }
         }
         const mcpServers = (settings['mcpServers'] as Record<string, unknown> | undefined) ?? {};
         const existing = mcpServers[MCP_SERVER_KEY] as { command?: string } | undefined;
@@ -66,14 +72,23 @@ function writeMcpEntry(filePath: string, command: string): boolean {
 }
 
 /**
- * Register with Claude Code via two paths:
- *  1. ~/.claude/settings.json — global (CLI + VS Code extension user scope)
- *  2. <workspace>/.mcp.json   — project scope (Claude Code VS Code extension reads this)
+ * Register with Claude Code.
+ *
+ * ~/.claude/settings.json — global (CLI + VS Code extension user scope) — is
+ * enough on its own: Claude Code reads it for every project. A project-level
+ * <workspace>/.mcp.json is also supported, but it drops an untracked file into
+ * every workspace that's opened, so it's opt-in via
+ * `seleniumbootMcp.registerProjectMcpJson`.
  */
 async function registerWithClaudeCode(command: string): Promise<void> {
     // Global user settings
     const globalSettings = path.join(os.homedir(), '.claude', 'settings.json');
     writeMcpEntry(globalSettings, command);
+
+    const writeProjectFiles = vscode.workspace
+        .getConfiguration('seleniumbootMcp')
+        .get<boolean>('registerProjectMcpJson', false);
+    if (!writeProjectFiles) return;
 
     // Project-level .mcp.json for each open workspace folder
     const folders = vscode.workspace.workspaceFolders ?? [];
@@ -110,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext) {
         return; // don't register until package is actually installed
     }
 
-    // Auto-register with Claude Code global settings and project .mcp.json
+    // Auto-register with Claude Code (global settings; project .mcp.json only if opted in)
     const command = await resolveCommand();
     await registerWithClaudeCode(command);
     console.log(`Seleniumboot MCP: registered "${command}"`);
