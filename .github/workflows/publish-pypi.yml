@@ -1,5 +1,18 @@
 name: Publish to PyPI
 
+# Authenticates to PyPI with Trusted Publishing (OIDC), not an API token.
+#
+# The token path had been returning 403 since ~2026-07-01: 0.4.0, 0.4.1 and
+# 0.4.2 were all published by hand, and the manual workaround hid the breakage
+# for weeks. Trusted Publishing removes the credential entirely — there is no
+# PYPI_API_TOKEN secret to expire, rotate, or silently revoke.
+#
+# This requires a matching publisher on PyPI:
+#   https://pypi.org/manage/project/seleniumboot-mcp/settings/publishing/
+#   Owner: seleniumboot | Repo: selenium-mcp
+#   Workflow: publish-pypi.yml | Environment: pypi
+# Without that entry the publish job fails at the OIDC exchange, not silently.
+
 on:
   release:
     types: [published]
@@ -32,12 +45,16 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Required for Trusted Publishing: mints the short-lived OIDC token that
+      # replaces the API token. Without it the publish step cannot authenticate.
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
+      # No `password:` — the action detects the OIDC token from id-token: write.
       - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}

@@ -1,0 +1,37 @@
+# Dependency alerting for seleniumboot-mcp.
+#
+# This exists because of #2: mcp 2.0.0 shipped 2026-07-28 and removed the
+# decorators server.py registers its 85 tools with. The dependency had no upper
+# bound, so every fresh install crashed at import for 25 days before a user
+# reported it. The upper bound in pyproject.toml stops the crash; this file is
+# what makes the *next* upstream major arrive as a PR instead of as a bug report.
+#
+# The pip ecosystem watches pyproject.toml. When mcp 3.0.0 lands, Dependabot
+# opens a PR widening the pin — that PR is the alert. Do not auto-merge it:
+# widening the pin is exactly the change that needs the release gate run first.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+
+  # The workflows pin actions by major tag; this catches the ones that go stale.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
