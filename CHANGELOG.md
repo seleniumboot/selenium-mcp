@@ -3,6 +3,37 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0]
+
+### Changed
+- **Migrated to the `mcp` 2.0 SDK.** 2.0.0 removed the `@server.list_tools()` /
+  `@server.call_tool()` decorators this server registered its 85 tools with;
+  they are replaced by `on_list_tools` / `on_call_tool` callbacks passed to the
+  `Server` constructor, taking a `ServerRequestContext` plus typed request
+  params and returning `ListToolsResult` / `CallToolResult`. This completes the
+  work 0.4.2 deferred when it pinned the SDK away from 2.x. (#2)
+- **The `mcp` dependency is now `>=2.0.0`.** The temporary `<2.0.0` ceiling from
+  0.4.2 is gone; 1.x is no longer supported, because the 1.x calling convention
+  no longer exists in the code. An upper bound returns when `mcp` 3.0 appears —
+  Dependabot now watches for exactly that.
+- **The server reports its own version** in the MCP handshake, read from the
+  installed distribution metadata rather than duplicated in source.
+
+**No behaviour change on the wire.** Tool names, input schemas, response
+content, and error strings are byte-for-byte what 0.4.x emitted; the migration
+was verified as a migration, not shipped alongside other changes. Verified
+against the published artifact in a clean environment: 85/85 tools registered
+with a handler each, entry point exits cleanly, protocol version `2025-03-26`
+still negotiates, and the 68-test `selenium-mcp-test` Java suite passes in full
+over real stdio JSON-RPC.
+
+### Infrastructure
+- **PyPI publishing now uses Trusted Publishing (OIDC)** instead of a stored API
+  token. The token had been returning 403 since ~2026-07-01, so 0.4.0 through
+  0.4.2 were each published by hand — a manual workaround that hid the breakage.
+- **Dependabot watches the dependencies.** The next upstream major arrives as a
+  pull request rather than as a bug report. That is the whole lesson of #2.
+
 ## [0.4.2]
 
 ### Fixed

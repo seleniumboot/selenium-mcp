@@ -7,10 +7,18 @@ Serves both Python and Java test automation users.
 import asyncio
 import logging
 import tempfile
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ImageContent,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+)
 
 from selenium_mcp.tools.browser_tools import BrowserTools
 from selenium_mcp.tools.element_tools import ElementTools
@@ -25,6 +33,13 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 log = logging.getLogger(__name__)
+
+try:
+    # Single source of truth is pyproject.toml; read it back off the installed
+    # distribution rather than duplicating the number in the source.
+    __version__ = _pkg_version("seleniumboot-mcp")
+except PackageNotFoundError:  # running from a source tree, not an install
+    __version__ = "0.0.0.dev0"
 
 SERVER_INSTRUCTIONS = """\
 Selenium Boot MCP — real-browser automation plus test-code generation.
@@ -65,8 +80,6 @@ compiles and never references non-existent fields. To cover more, interact with
 more real elements first, then regenerate — do not pad the test by hand.
 """
 
-app = Server("selenium-mcp", instructions=SERVER_INSTRUCTIONS)
-
 browser = BrowserTools()
 element = ElementTools(browser)
 assertion = AssertionTools(browser)
@@ -87,26 +100,57 @@ TOOL_HANDLERS = {
 }
 
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    return ALL_TOOLS
+# mcp 2.0 replaced the @app.list_tools() / @app.call_tool() decorators with
+# constructor callbacks. The handlers now take a ServerRequestContext plus typed
+# request params, and return Result models instead of bare content lists.
+#
+# The wire output is deliberately unchanged from 0.4.x — same content, same
+# text, same error strings. A migration that also changes behaviour cannot be
+# verified as a migration. (Returning is_error=True on the exception path is
+# the semantically correct thing and is a follow-up, not part of this change.)
 
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def list_tools(
+    ctx: ServerRequestContext[None],
+    params: PaginatedRequestParams | None,
+) -> ListToolsResult:
+    return ListToolsResult(tools=ALL_TOOLS)
+
+
+async def call_tool(
+    ctx: ServerRequestContext[None],
+    params: CallToolRequestParams,
+) -> CallToolResult:
+    name = params.name
+    arguments = params.arguments or {}
     log.info(f"Tool called: {name} | args: {arguments}")
     handler = TOOL_HANDLERS.get(name)
     if not handler:
-        return [TextContent(type="text", text=f"Unknown tool: {name}")]
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"Unknown tool: {name}")]
+        )
     try:
         result = await handler(arguments)
         if isinstance(result, str) and result.startswith("screenshot:base64:"):
             b64 = result[len("screenshot:base64:"):]
-            return [ImageContent(type="image", data=b64, mimeType="image/png")]
-        return [TextContent(type="text", text=result)]
+            return CallToolResult(
+                content=[ImageContent(type="image", data=b64, mimeType="image/png")]
+            )
+        return CallToolResult(content=[TextContent(type="text", text=result)])
     except Exception as e:
         log.error(f"Tool error [{name}]: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"Error: {str(e)}")]
+        )
+
+
+app = Server(
+    "selenium-mcp",
+    version=__version__,
+    instructions=SERVER_INSTRUCTIONS,
+    on_list_tools=list_tools,
+    on_call_tool=call_tool,
+)
 
 
 async def main():
