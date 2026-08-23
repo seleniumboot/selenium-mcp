@@ -41,7 +41,7 @@ jobs:
       - name: Import and register tools
         run: |
           python - <<'PY'
-          import asyncio, sys
+          import sys
           from importlib.metadata import version
 
           from selenium_mcp import server
@@ -49,7 +49,12 @@ jobs:
           print("seleniumboot-mcp:", version("seleniumboot-mcp"))
           print("mcp:", version("mcp"))
 
-          tools = asyncio.run(server.list_tools())
+          # Assert against the registry itself, not by calling the request
+          # handler. The handler's signature belongs to the mcp SDK and changed
+          # in 2.0 (it now takes a context + typed params); ALL_TOOLS is ours
+          # and is what the handler returns. Checking the registry keeps this
+          # test measuring the package rather than the SDK's calling convention.
+          tools = server.ALL_TOOLS
           handlers = server.TOOL_HANDLERS
           names = {t.name for t in tools}
 
