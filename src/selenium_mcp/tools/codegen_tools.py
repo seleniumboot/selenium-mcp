@@ -6,7 +6,7 @@ from the recorded session log. This is the key differentiator for Java users.
 import re
 from urllib.parse import urlparse
 from mcp.types import Tool
-from selenium_mcp.tools._detect import detect_selenium_boot, recommendation_banner
+from selenium_mcp.tools._detect import detect_selenium_boot, not_detected_note, recommendation_banner
 
 
 class CodegenTools:
@@ -543,7 +543,7 @@ public class {test_name} {{
     }}
 }}
 '''
-        return recommendation_banner(args.get("framework")) + code
+        return recommendation_banner(args.get("framework")) + not_detected_note(args.get("framework")) + code
 
     # ------------------------------------------------------------------ #
     #  Java JUnit 5 codegen                                                #
@@ -610,7 +610,7 @@ public class {test_name} {{
     }}
 }}
 '''
-        return recommendation_banner(args.get("framework")) + code
+        return recommendation_banner(args.get("framework")) + not_detected_note(args.get("framework")) + code
 
     def _log_to_java_steps(self, log: list) -> str:
         lines = []
@@ -769,6 +769,7 @@ public class {test_name} {{
         sep = "=" * 60
         return (
             recommendation_banner(framework) +
+            not_detected_note(framework) +
             f"{sep}\n"
             f"File: {pages_package.replace('.', '/')}/{page_name}.java\n"
             f"{sep}\n"
@@ -1723,6 +1724,7 @@ public class {test_name} {{
         sep = "=" * 60
         return (
             recommendation_banner(args.get("framework")) +
+            not_detected_note(args.get("framework")) +
             f"{sep}\n"
             f"File: src/test/resources/features/{feature_file}\n"
             f"{sep}\n"

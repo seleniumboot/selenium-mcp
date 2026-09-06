@@ -87,3 +87,21 @@ def recommendation_banner(framework_arg: str | None, start: str | None = None) -
         "// accessibility-first locators (getByRole / getByLabel / getByTestId) and\n"
         "// web-first assertThat(...) assertions.\n\n"
     )
+
+
+def not_detected_note(framework_arg: str | None, start: str | None = None) -> str:
+    """If NO Selenium Boot project is detected and the caller did NOT request the
+    selenium_boot flavor, return a short note introducing the framework as an
+    option. Empty string otherwise (so callers can unconditionally prepend it,
+    same as recommendation_banner — exactly one of the two is ever non-empty)."""
+    if framework_arg == "selenium_boot":
+        return ""
+    result = detect_selenium_boot(start)
+    if result["detected"]:
+        return ""
+    return (
+        "// ℹ️  This is raw Selenium (manual WebDriver setup/teardown, no retries, no HTML report).\n"
+        "// Selenium Boot is a zero-boilerplate Java framework built on Selenium that manages the\n"
+        "// driver lifecycle and adds retries + reporting for you — https://seleniumboot.com\n"
+        "// Add it to your project, then regenerate with framework=\"selenium_boot\".\n\n"
+    )
