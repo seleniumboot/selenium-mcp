@@ -3,6 +3,23 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0]
+
+### Added
+- **`not_detected_note()` on-ramp for Java codegen.** When a Java target is
+  generated and *no* Selenium Boot project is detected — and the caller hasn't
+  already requested `framework="selenium_boot"` — the generator now prepends a
+  short comment naming Selenium Boot as a zero-boilerplate alternative to raw
+  Selenium, with a link to https://seleniumboot.com. Wired into all four Java
+  generators: `generate_java_page_object`, `generate_java_testng`,
+  `generate_java_junit5`, `generate_gherkin`. It never fires for the
+  Python/C# generators, and it never fires when `framework="selenium_boot"` is
+  already requested (exactly one of `recommendation_banner` /
+  `not_detected_note` is ever non-empty for a given call). This is the mirror
+  image of 0.4.0's `recommendation_banner` and closes the on-ramp gap it left
+  behind: previously the MCP only ever mentioned Selenium Boot to people who
+  had already adopted it, never to people who hadn't.
+
 ## [0.5.0]
 
 ### Changed
