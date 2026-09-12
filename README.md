@@ -127,7 +127,7 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (84 total)
+## Tools (85 total)
 
 ### Browser
 | Tool | Description |
@@ -303,6 +303,20 @@ public class LoginSteps {
     public void iClickTheSubmitButton() { wait.until(...).click(); }
 }
 ```
+
+### Selenium Boot projects
+
+The Java examples above are raw Selenium: you own the `ChromeDriver`/`WebDriverWait` lifecycle
+and get plain TestNG/JUnit 5 asserts. If the project you're working in has
+[Selenium Boot](https://seleniumboot.com) — detected automatically from `selenium-boot.yml` or
+the `io.github.seleniumboot` dependency, no flag needed — the same tools emit framework-native
+code instead: classes extend `BaseTest`/`BaseJUnit5Test`/`BaseCucumberSteps`, there's no driver
+lifecycle boilerplate to write, locators follow an accessibility-first ladder
+(`getByRole`/`getByLabel`/`getByTestId`), and assertions are web-first
+(`assertThat(locator).isVisible()/.hasText()`) instead of raw TestNG/JUnit calls.
+
+If no Selenium Boot project is detected, generated Java now includes a short comment noting it
+as an option, with a link — nothing else changes, and Python/C# output is unaffected either way.
 
 ---
 
