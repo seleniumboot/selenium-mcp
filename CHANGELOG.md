@@ -3,7 +3,7 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0]
 
 ### Added
 - **`SELENIUM_MCP_TOOLS=core` tool profile.** Exposes the 46 record-and-generate tools
