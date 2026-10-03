@@ -39,15 +39,7 @@ class CodegenTools:
             ),
             Tool(
                 name="generate_java_testng",
-                description=(
-                    "Generate a Java TestNG test class from the current browser session. "
-                    "framework='testng' (default) emits standalone Selenium with a "
-                    "ChromeDriver setUp/tearDown; framework='selenium_boot' emits a "
-                    "Selenium Boot test (extends BaseTest, framework-managed driver, "
-                    "accessibility-first getByRole/getByLabel/getByTestId locators and "
-                    "web-first assertThat assertions — no driver lifecycle boilerplate). "
-                    "In a Selenium Boot project, use framework='selenium_boot'."
-                ),
+                description="Generate a Java TestNG test from the session. framework='selenium_boot' inside a Selenium Boot project.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -63,21 +55,14 @@ class CodegenTools:
                             "type": "string",
                             "enum": ["testng", "selenium_boot"],
                             "default": "testng",
-                            "description": "Output flavor. Use 'selenium_boot' inside a Selenium Boot project."
+                            "description": "Output flavor"
                         }
                     },
                 },
             ),
             Tool(
                 name="generate_java_junit5",
-                description=(
-                    "Generate a Java JUnit 5 test class from the current browser session. "
-                    "framework='junit5' (default) emits standalone Selenium with a "
-                    "ChromeDriver setUp/tearDown; framework='selenium_boot' emits a "
-                    "Selenium Boot test (extends BaseJUnit5Test, framework-managed driver, "
-                    "accessibility-first locators and web-first assertThat assertions). "
-                    "In a Selenium Boot project, use framework='selenium_boot'."
-                ),
+                description="Generate a Java JUnit 5 test from the session. framework='selenium_boot' inside a Selenium Boot project.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -93,21 +78,14 @@ class CodegenTools:
                             "type": "string",
                             "enum": ["junit5", "selenium_boot"],
                             "default": "junit5",
-                            "description": "Output flavor. Use 'selenium_boot' inside a Selenium Boot project."
+                            "description": "Output flavor"
                         }
                     },
                 },
             ),
             Tool(
                 name="detect_selenium_boot",
-                description=(
-                    "Detect whether the current working directory is inside a Selenium Boot "
-                    "project (looks for selenium-boot.yml or the io.github.seleniumboot "
-                    "dependency in pom.xml / build.gradle, walking up parent directories). "
-                    "Call this BEFORE generating Java code: if it reports detected=true, "
-                    "generate with framework=\"selenium_boot\" so the output uses the "
-                    "framework's accessibility-first locators and managed driver."
-                ),
+                description="Detect whether the working directory is a Selenium Boot project. Call BEFORE generating Java; if detected=true use framework='selenium_boot'.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -130,14 +108,7 @@ class CodegenTools:
             ),
             Tool(
                 name="generate_gherkin",
-                description=(
-                    "Generate a Cucumber Gherkin .feature file + Java step definitions class "
-                    "from the recorded browser session. Steps are written in plain English "
-                    "and wired to Java code. framework='raw' (default) emits standalone "
-                    "Selenium with a ChromeDriver @Before/@After; framework='selenium_boot' "
-                    "emits steps extending BaseCucumberSteps with framework-managed driver "
-                    "and accessibility-first locators. Use 'selenium_boot' in a Selenium Boot project."
-                ),
+                description="Generate a Cucumber .feature file + Java step definitions from the session. framework='selenium_boot' inside a Selenium Boot project.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -157,7 +128,7 @@ class CodegenTools:
                             "type": "string",
                             "enum": ["raw", "selenium_boot"],
                             "default": "raw",
-                            "description": "Step-definition flavor. Use 'selenium_boot' inside a Selenium Boot project."
+                            "description": "Step-definition flavor"
                         }
                     },
                 },
@@ -230,16 +201,7 @@ class CodegenTools:
             ),
             Tool(
                 name="generate_java_page_object",
-                description=(
-                    "Generate a Java Page Object class + matching test class from the recorded session. "
-                    "USE THIS INSTEAD OF WRITING JAVA BY HAND — the output compiles as-is and contains only "
-                    "the elements/actions actually performed, so it never invents fields or uses non-existent "
-                    "framework APIs. Produces two files: a Page Object (locators + fluent action methods) and a "
-                    "Test class that uses it. Supports raw Selenium (TestNG / JUnit 5) and the Selenium Boot "
-                    "framework (selenium_boot): Page Object extends BasePage, Test extends BaseTest, no manual "
-                    "driver lifecycle — the framework manages it — with accessibility-first locators. "
-                    "For any Java test in a Selenium Boot repo, use framework=\"selenium_boot\"."
-                ),
+                description="Generate a Java Page Object + test class from the session. Use this instead of hand-writing Java. framework='selenium_boot' inside a Selenium Boot project.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -249,20 +211,13 @@ class CodegenTools:
                         },
                         "package_name": {
                             "type": "string",
-                            "description": ("Base package, e.g. com.demo. The Page Object is placed in "
-                                            "<base>.pages and the Test in <base>.tests. A trailing .pages "
-                                            "or .tests is stripped, so passing either the base or a pages "
-                                            "package works."),
+                            "description": "Base package; Page Object goes in <base>.pages, test in <base>.tests",
                             "default": "com.example"
                         },
                         "framework": {
                             "type": "string",
                             "enum": ["testng", "junit5", "selenium_boot"],
-                            "description": (
-                                "Output flavor: 'testng'/'junit5' emit standalone Selenium with a "
-                                "ChromeDriver setUp/tearDown; 'selenium_boot' emits Selenium Boot "
-                                "(BasePage/BaseTest, framework-managed driver, web-first assertions)."
-                            ),
+                            "description": "Output flavor",
                             "default": "testng"
                         }
                     },

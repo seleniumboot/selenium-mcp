@@ -24,6 +24,7 @@ from selenium_mcp.tools.browser_tools import BrowserTools
 from selenium_mcp.tools.element_tools import ElementTools
 from selenium_mcp.tools.assertion_tools import AssertionTools
 from selenium_mcp.tools.codegen_tools import CodegenTools
+from selenium_mcp.tools._profiles import select_tools
 
 _log_path = Path(tempfile.gettempdir()) / "selenium-mcp.log"
 _log_path.touch(mode=0o600, exist_ok=True)
@@ -98,6 +99,9 @@ TOOL_HANDLERS = {
     **assertion.get_handlers(),
     **codegen.get_handlers(),
 }
+
+# SELENIUM_MCP_TOOLS=core exposes only the record-and-generate subset (default: all).
+ALL_TOOLS, TOOL_HANDLERS = select_tools(ALL_TOOLS, TOOL_HANDLERS)
 
 
 # mcp 2.0 replaced the @app.list_tools() / @app.call_tool() decorators with

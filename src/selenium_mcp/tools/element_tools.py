@@ -33,18 +33,18 @@ _MODIFIERS: dict[str, str] = {
 LOCATOR_SCHEMA = {
     "selector": {
         "type": "string",
-        "description": "CSS selector, XPath, or other locator value"
+        "description": "Locator value"
     },
     "by": {
         "type": "string",
         "enum": list(BY_MAP.keys()),
         "default": "css",
-        "description": "Locator strategy"
+        "description": "Strategy"
     },
     "timeout": {
         "type": "integer",
         "default": 10,
-        "description": "Wait timeout in seconds"
+        "description": "Seconds"
     }
 }
 

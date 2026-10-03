@@ -3,6 +3,17 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`SELENIUM_MCP_TOOLS=core` tool profile.** Exposes the 46 record-and-generate tools
+  instead of all 85, cutting the tool-schema cost from ~6.3k to ~3.7k tokens per session.
+  Default is unchanged (`all`); unrecognised values fall back to `all`.
+
+### Changed
+- Shorter tool and parameter descriptions (~11% smaller tool schemas). No tool names,
+  parameters or behaviour changed.
+
 ## [0.6.0]
 
 ### Added

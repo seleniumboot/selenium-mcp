@@ -129,6 +129,18 @@ Claude controls the real browser, records every action, and on request generates
 
 ## Tools (85 total)
 
+### Reducing token use
+
+Tool definitions are sent to the model every session (~6k tokens for all 85). If you only
+record-and-generate tests, set `SELENIUM_MCP_TOOLS=core` in the server's environment to expose
+46 tools (~3.7k tokens). Cookies, storage, windows/tabs, network mocking, device emulation,
+screenshots-diff, accessibility, healing and the CI/C# generators are left out. Unset, or
+`all`, exposes everything (the default).
+
+```json
+{ "mcpServers": { "selenium": { "command": "seleniumboot-mcp", "env": { "SELENIUM_MCP_TOOLS": "core" } } } }
+```
+
 ### Browser
 | Tool | Description |
 |---|---|
