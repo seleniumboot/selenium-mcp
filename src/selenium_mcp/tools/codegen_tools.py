@@ -9,6 +9,12 @@ from mcp.types import Tool
 from selenium_mcp.tools._detect import detect_selenium_boot, not_detected_note, recommendation_banner
 
 
+GENERATE_LANGUAGES = (
+    "python", "java", "csharp", "gherkin", "playwright",
+    "github_actions", "jenkins", "gitlab_ci",
+)
+
+
 class CodegenTools:
     def __init__(self, browser_tools):
         self.browser = browser_tools
@@ -16,71 +22,57 @@ class CodegenTools:
     def get_tools(self) -> list[Tool]:
         return [
             Tool(
-                name="generate_python_test",
+                name="generate",
                 description=(
-                    "Generate a pytest + Selenium test script from the current browser session. "
-                    "Captures all recorded actions (navigate, click, type, hover, drag, select, etc.) into a runnable test."
+                    "Generate test code or CI config from the recorded session. "
+                    "language: python (pytest) | java | csharp (NUnit) | gherkin (.feature + Java steps) | "
+                    "playwright (TS hints) | github_actions | jenkins | gitlab_ci. "
+                    "In a Selenium Boot project (see detect_selenium_boot) use language=java|gherkin, framework=selenium_boot."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "test_name": {
+                        "language": {
                             "type": "string",
-                            "default": "test_recorded_flow",
-                            "description": "Name of the test function"
-                        },
-                        "class_name": {
-                            "type": "string",
-                            "default": "TestRecordedFlow",
-                            "description": "Name of the test class"
-                        },
-                    },
-                },
-            ),
-            Tool(
-                name="generate_java_testng",
-                description="Generate a Java TestNG test from the session. framework='selenium_boot' inside a Selenium Boot project.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "test_name": {
-                            "type": "string",
-                            "default": "RecordedFlowTest"
-                        },
-                        "package_name": {
-                            "type": "string",
-                            "default": "com.tests.selenium"
+                            "enum": list(GENERATE_LANGUAGES),
+                            "description": "Output target",
                         },
                         "framework": {
                             "type": "string",
-                            "enum": ["testng", "selenium_boot"],
+                            "enum": ["testng", "junit5", "selenium_boot", "raw"],
+                            "description": (
+                                "java: testng (default) | junit5 | selenium_boot. "
+                                "gherkin: raw (default) | selenium_boot. Ignored otherwise."
+                            ),
+                        },
+                        "kind": {
+                            "type": "string",
+                            "enum": ["test", "page_object"],
+                            "default": "test",
+                            "description": "java only: page_object emits Page Object + test class",
+                        },
+                        "runner": {
+                            "type": "string",
+                            "enum": ["testng", "junit5"],
                             "default": "testng",
-                            "description": "Output flavor"
-                        }
-                    },
-                },
-            ),
-            Tool(
-                name="generate_java_junit5",
-                description="Generate a Java JUnit 5 test from the session. framework='selenium_boot' inside a Selenium Boot project.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "test_name": {
-                            "type": "string",
-                            "default": "RecordedFlowTest"
+                            "description": "java kind=test with framework=selenium_boot only: BaseTest (testng) or BaseJUnit5Test (junit5)",
                         },
-                        "package_name": {
+                        "test_name": {"type": "string", "description": "Test function/class name (python, java, csharp, playwright)"},
+                        "class_name": {"type": "string", "description": "python only: test class name"},
+                        "package_name": {"type": "string", "description": "java/gherkin package (page_object: base package)"},
+                        "page_name": {"type": "string", "description": "page_object only: e.g. LoginPage; inferred from URL if omitted"},
+                        "feature_name": {"type": "string", "description": "gherkin only: e.g. Login; inferred from URL if omitted"},
+                        "scenario_name": {"type": "string", "description": "gherkin only"},
+                        "namespace": {"type": "string", "description": "csharp only"},
+                        "build": {
                             "type": "string",
-                            "default": "com.tests.selenium"
+                            "enum": ["java_maven", "java_gradle", "python_pytest"],
+                            "default": "java_maven",
+                            "description": "CI targets only: build tool",
                         },
-                        "framework": {
-                            "type": "string",
-                            "enum": ["junit5", "selenium_boot"],
-                            "default": "junit5",
-                            "description": "Output flavor"
-                        }
+                        "java_version": {"type": "string", "default": "17", "description": "CI targets only"},
                     },
+                    "required": ["language"],
                 },
             ),
             Tool(
@@ -106,141 +98,47 @@ class CodegenTools:
                 description="Clear the recorded action log and start fresh.",
                 inputSchema={"type": "object", "properties": {}},
             ),
-            Tool(
-                name="generate_gherkin",
-                description="Generate a Cucumber .feature file + Java step definitions from the session. framework='selenium_boot' inside a Selenium Boot project.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "feature_name": {
-                            "type": "string",
-                            "description": "Feature name e.g. 'Login'. Auto-inferred from URL if omitted."
-                        },
-                        "scenario_name": {
-                            "type": "string",
-                            "default": "Recorded user flow"
-                        },
-                        "package_name": {
-                            "type": "string",
-                            "default": "com.tests.selenium"
-                        },
-                        "framework": {
-                            "type": "string",
-                            "enum": ["raw", "selenium_boot"],
-                            "default": "raw",
-                            "description": "Step-definition flavor"
-                        }
-                    },
-                },
-            ),
-            Tool(
-                name="generate_csharp_nunit",
-                description="Generate a C# NUnit + Selenium test class from the current browser session.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "test_name":   {"type": "string", "default": "RecordedFlowTests"},
-                        "namespace":   {"type": "string", "default": "SeleniumTests"},
-                    },
-                },
-            ),
-            Tool(
-                name="generate_github_actions",
-                description="Generate a GitHub Actions CI workflow YAML for running the recorded test session.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "language": {
-                            "type": "string",
-                            "enum": ["java_maven", "java_gradle", "python_pytest"],
-                            "default": "java_maven",
-                        },
-                        "java_version": {"type": "string", "default": "17"},
-                    },
-                },
-            ),
-            Tool(
-                name="generate_jenkins_pipeline",
-                description="Generate a declarative Jenkinsfile for running the recorded test session (Maven, Gradle, or pytest).",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "language": {
-                            "type": "string",
-                            "enum": ["java_maven", "java_gradle", "python_pytest"],
-                            "default": "java_maven",
-                        },
-                        "java_version": {"type": "string", "default": "17"},
-                    },
-                },
-            ),
-            Tool(
-                name="generate_gitlab_ci",
-                description="Generate a .gitlab-ci.yml pipeline for running the recorded test session (Maven, Gradle, or pytest).",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "language": {
-                            "type": "string",
-                            "enum": ["java_maven", "java_gradle", "python_pytest"],
-                            "default": "java_maven",
-                        },
-                        "java_version": {"type": "string", "default": "17"},
-                    },
-                },
-            ),
-            Tool(
-                name="generate_playwright_hints",
-                description="Generate equivalent Playwright (TypeScript) code hints from the recorded browser session.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "test_name": {"type": "string", "default": "recordedFlow"},
-                    },
-                },
-            ),
-            Tool(
-                name="generate_java_page_object",
-                description="Generate a Java Page Object + test class from the session. Use this instead of hand-writing Java. framework='selenium_boot' inside a Selenium Boot project.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "page_name": {
-                            "type": "string",
-                            "description": "Name of the page class e.g. LoginPage. Auto-inferred from URL if omitted."
-                        },
-                        "package_name": {
-                            "type": "string",
-                            "description": "Base package; Page Object goes in <base>.pages, test in <base>.tests",
-                            "default": "com.example"
-                        },
-                        "framework": {
-                            "type": "string",
-                            "enum": ["testng", "junit5", "selenium_boot"],
-                            "description": "Output flavor",
-                            "default": "testng"
-                        }
-                    },
-                },
-            ),
         ]
 
     def get_handlers(self) -> dict:
         return {
-            "generate_python_test":       self._generate_python,
-            "generate_java_testng":       self._generate_java_testng,
-            "generate_java_junit5":       self._generate_java_junit5,
+            "generate":                   self._generate,
             "get_session_log":            self._get_session_log,
             "clear_session_log":          self._clear_session_log,
-            "generate_java_page_object":  self._generate_java_page_object,
             "detect_selenium_boot":       self._detect_selenium_boot,
-            "generate_gherkin":           self._generate_gherkin,
-            "generate_csharp_nunit":      self._generate_csharp_nunit,
-            "generate_github_actions":    self._generate_github_actions,
-            "generate_jenkins_pipeline":  self._generate_jenkins_pipeline,
-            "generate_gitlab_ci":         self._generate_gitlab_ci,
-            "generate_playwright_hints":  self._generate_playwright_hints,
         }
+
+    # ------------------------------------------------------------------ #
+    #  Unified generate() dispatch                                         #
+    # ------------------------------------------------------------------ #
+    async def _generate(self, args: dict) -> str:
+        """Route generate(language, framework, ...) to the per-target generators."""
+        language = args.get("language")
+        if language not in GENERATE_LANGUAGES:
+            return f"Error: language must be one of {', '.join(GENERATE_LANGUAGES)} (got {language!r})."
+        a = {k: v for k, v in args.items() if v is not None}
+        if language == "java":
+            framework = a.get("framework", "testng")
+            if framework not in ("testng", "junit5", "selenium_boot"):
+                return "Error: java framework must be testng, junit5 or selenium_boot."
+            if a.get("kind", "test") == "page_object":
+                return await self._generate_java_page_object(a)
+            runner = a.get("runner", "testng") if framework == "selenium_boot" else framework
+            if runner == "junit5":
+                return await self._generate_java_junit5(a)
+            return await self._generate_java_testng(a)
+        if language in ("github_actions", "jenkins", "gitlab_ci"):
+            a["language"] = a.get("build", "java_maven")
+        handlers = {
+            "python": self._generate_python,
+            "csharp": self._generate_csharp_nunit,
+            "gherkin": self._generate_gherkin,
+            "playwright": self._generate_playwright_hints,
+            "github_actions": self._generate_github_actions,
+            "jenkins": self._generate_jenkins_pipeline,
+            "gitlab_ci": self._generate_gitlab_ci,
+        }
+        return await handlers[language](a)
 
     # ------------------------------------------------------------------ #
     #  Session log utils                                                   #

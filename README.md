@@ -127,18 +127,19 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (85 total)
+## Tools (76 total; 42 exposed by default)
 
 ### Reducing token use
 
-Tool definitions are sent to the model every session (~6k tokens for all 85). If you only
-record-and-generate tests, set `SELENIUM_MCP_TOOLS=core` in the server's environment to expose
-46 tools (~3.7k tokens). Cookies, storage, windows/tabs, network mocking, device emulation,
-screenshots-diff, accessibility, healing and the CI/C# generators are left out. Unset, or
-`all`, exposes everything (the default).
+Tool definitions are sent to the model every session. Since 0.8.0 the server exposes the
+`core` profile by default: 42 tools, ~3.8k tokens, covering the record-and-generate workflow
+(browser, elements, assertions, and the single `generate` tool for every output target).
+Cookies, storage, windows/tabs, network mocking, device emulation, screenshot-diff,
+accessibility, healing, shadow DOM, tables and double/right-click/drag are left out.
+Set `SELENIUM_MCP_TOOLS=all` to expose all 76 (~6.3k tokens).
 
 ```json
-{ "mcpServers": { "selenium": { "command": "seleniumboot-mcp", "env": { "SELENIUM_MCP_TOOLS": "core" } } } }
+{ "mcpServers": { "selenium": { "command": "seleniumboot-mcp", "env": { "SELENIUM_MCP_TOOLS": "all" } } } }
 ```
 
 ### Browser
@@ -222,16 +223,7 @@ screenshots-diff, accessibility, healing and the CI/C# generators are left out. 
 ### Codegen
 | Tool | Description |
 |---|---|
-| `generate_java_testng` | Java TestNG test class from session |
-| `generate_java_junit5` | Java JUnit 5 test class from session |
-| `generate_java_page_object` | Java Page Object class + test class from session |
-| `generate_gherkin` | Gherkin `.feature` file + Java step definitions from session |
-| `generate_python_test` | pytest class from session |
-| `generate_csharp_nunit` | C# NUnit + Selenium test class from session |
-| `generate_github_actions` | GitHub Actions CI workflow YAML (Maven / Gradle / pytest) |
-| `generate_jenkins_pipeline` | Declarative Jenkinsfile (Maven / Gradle / pytest) |
-| `generate_gitlab_ci` | GitLab CI `.gitlab-ci.yml` pipeline (Maven / Gradle / pytest) |
-| `generate_playwright_hints` | Equivalent Playwright TypeScript code from session |
+| `generate` | Test code or CI config from the session. `language`: `python`, `java`, `csharp`, `gherkin`, `playwright`, `github_actions`, `jenkins`, `gitlab_ci`. Java: `framework` = `testng` / `junit5` / `selenium_boot`, `kind` = `test` / `page_object`. |
 | `get_session_log` | View recorded actions |
 | `clear_session_log` | Reset the session recording |
 
@@ -363,8 +355,8 @@ Successful fallbacks are **cached** so the healed selector is reused automatical
 - [x] Full session recording — hover, double_click, right_click, scroll, select_option
 - [x] Codegen for hover, drag-and-drop, select, scroll in Java and Python templates
 - [x] Auto-start browser on first use (no explicit `start_browser` needed)
-- [x] Page Object Model generation (`generate_java_page_object`)
-- [x] Cucumber / Gherkin step generation (`generate_gherkin`)
+- [x] Page Object Model generation (`generate` with `language=java, kind=page_object`)
+- [x] Cucumber / Gherkin step generation (`generate` with `language=gherkin`)
 - [x] Self-healing locators — automatic fallback when a selector breaks
 - [x] Alert/dialog handling, iframe switching, shadow DOM, table extraction
 - [x] Cookie, localStorage, sessionStorage management

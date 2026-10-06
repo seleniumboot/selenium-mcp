@@ -3,6 +3,43 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0]
+
+### Breaking
+- **The 10 `generate_*` tools are merged into one `generate` tool.** Prompts, rules files
+  and scripts that name the old tools must be updated.
+- **`core` is now the default tool profile** (42 tools, ~3.8k schema tokens, was 85 tools,
+  ~6.8k). Tools outside core (cookies, storage, windows/tabs, network mocking, device
+  emulation, screenshot-diff, accessibility, healing, shadow DOM, tables, double/right
+  click, drag-and-drop, alerts text, ...) are hidden unless you set `SELENIUM_MCP_TOOLS=all`.
+  Unrecognised values now fall back to `core` (previously `all`).
+
+### Migration
+
+| Old tool | New call |
+|---|---|
+| `generate_python_test` | `generate(language="python")` |
+| `generate_java_testng` | `generate(language="java", framework="testng")` |
+| `generate_java_testng` (`framework=selenium_boot`) | `generate(language="java", framework="selenium_boot")` |
+| `generate_java_junit5` | `generate(language="java", framework="junit5")` |
+| `generate_java_junit5` (`framework=selenium_boot`) | `generate(language="java", framework="selenium_boot", runner="junit5")` |
+| `generate_java_page_object` | `generate(language="java", kind="page_object", framework=...)` |
+| `generate_gherkin` | `generate(language="gherkin", framework="raw"\|"selenium_boot")` |
+| `generate_csharp_nunit` | `generate(language="csharp")` |
+| `generate_github_actions` | `generate(language="github_actions", build="java_maven"\|"java_gradle"\|"python_pytest")` |
+| `generate_jenkins_pipeline` | `generate(language="jenkins", build=...)` |
+| `generate_gitlab_ci` | `generate(language="gitlab_ci", build=...)` |
+| `generate_playwright_hints` | `generate(language="playwright")` |
+
+Option names (`test_name`, `package_name`, `page_name`, `feature_name`, `scenario_name`,
+`namespace`, `class_name`, `java_version`) are unchanged. The CI tools' old `language`
+option is now `build`. To keep the old full tool set, add `SELENIUM_MCP_TOOLS=all`
+(note the old `generate_*` names do not come back in either profile).
+
+### Changed
+- Generated output is unchanged; only the tool surface moved. Element tools were not
+  regrouped (no capability-preserving grouping was worth the risk).
+
 ## [0.7.0]
 
 ### Added

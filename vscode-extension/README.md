@@ -87,7 +87,9 @@ Open the Command Palette (`Ctrl+Shift+P`) to access:
 `assert_title`, `assert_url`, `assert_text`, `assert_element_visible`, `assert_element_not_visible`, `assert_attribute`, `assert_page_contains`, `assert_element_count`
 
 ### Code generation
-`generate_java_testng`, `generate_java_junit5`, `generate_java_page_object`, `generate_gherkin`, `generate_python_test`, `generate_csharp_nunit`, `generate_github_actions`, `generate_playwright_hints`, `get_session_log`, `clear_session_log`
+`generate` (python, java, csharp, gherkin, playwright, github_actions, jenkins, gitlab_ci), `get_session_log`, `clear_session_log`
+
+The server exposes the `core` tool profile by default (0.8.0+); set `SELENIUM_MCP_TOOLS=all` for the full tool set (e.g. cookies, windows/tabs, network mocking).
 
 ---
 

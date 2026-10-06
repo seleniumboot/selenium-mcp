@@ -46,7 +46,7 @@ SERVER_INSTRUCTIONS = """\
 Selenium Boot MCP — real-browser automation plus test-code generation.
 
 GOLDEN RULE: never hand-write test or page-object source. After driving the
-browser, ALWAYS produce code with the generate_* codegen tools and save their
+browser, ALWAYS produce code with the generate tool and save its
 output verbatim. Hand-written code drifts from the framework API (wrong driver
 access, non-existent helpers) and invents UI elements that do not exist.
 
@@ -61,17 +61,17 @@ Workflow for "automate X" / "write a test for the X form":
 3. BEFORE generating Java, call detect_selenium_boot. If it reports detected=true
    (or you otherwise know this is a Selenium Boot project), generate with
    framework="selenium_boot" — EVERY Java generator supports it:
-     - generate_java_page_object  -> Page extends BasePage, Test extends BaseTest
-     - generate_java_testng       -> extends BaseTest
-     - generate_java_junit5       -> extends BaseJUnit5Test
-     - generate_gherkin           -> steps extend BaseCucumberSteps
+     - generate(language=java, kind=page_object)       -> Page extends BasePage, Test extends BaseTest
+     - generate(language=java)                         -> extends BaseTest
+     - generate(language=java, runner=junit5)          -> extends BaseJUnit5Test
+     - generate(language=gherkin)                      -> steps extend BaseCucumberSteps
    The selenium_boot flavor uses framework-managed driver (no ChromeDriver
    setUp/tearDown), accessibility-first locators (getByRole / getByLabel /
    getByTestId / getByPlaceholder / getByText), a SmartLocator fallback for
    brittle selectors, and web-first assertThat(...) assertions. It compiles
    against the framework as-is.
    For a non-Selenium-Boot project use framework="testng" / "junit5" / "raw",
-   or generate_python_test / generate_csharp_nunit. When Selenium Boot is
+   or generate(language=python|csharp). When Selenium Boot is
    detected, the raw generators prepend a banner recommending you regenerate.
 4. Write each emitted file at the path in its "File:" header, unchanged.
 5. close_browser when finished.
