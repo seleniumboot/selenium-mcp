@@ -1,30 +1,68 @@
 """migrate tool — run selenium-boot-migrator's read-only analysis and return its JSON report."""
 
 import asyncio
+import hashlib
 import os
 import shutil
+import urllib.request
 from pathlib import Path
 from mcp.types import Tool
 
 JAR_ENV = "SELENIUM_BOOT_MIGRATOR_JAR"
 TIMEOUT_SECONDS = 120
 
+# Pinned release, verified by hash. Bump both together when the migrator releases.
+MIGRATOR_VERSION = "0.1.0"
+MIGRATOR_URL = (
+    "https://github.com/seleniumboot/selenium-boot-migrator/releases/download/"
+    f"v{MIGRATOR_VERSION}/selenium-boot-migrator.jar"
+)
+MIGRATOR_SHA256 = "9939cd127d2186faece9e79d1c8330d07900644749088ce7ccbe924291ca80f0"
+CACHE_DIR = Path.home() / ".cache" / "seleniumboot-mcp"
+
 NOT_FOUND = (
-    "selenium-boot-migrator not found. Build it (mvn package in "
-    "github.com/seleniumboot/selenium-boot-migrator) and either set "
-    f"{JAR_ENV} to the jar path or put a 'selenium-boot-migrator' launcher on PATH."
+    "selenium-boot-migrator unavailable. Set "
+    f"{JAR_ENV} to a jar built with mvn package from "
+    "github.com/seleniumboot/selenium-boot-migrator, or put a 'selenium-boot-migrator' "
+    "launcher on PATH. Java 17+ is required."
 )
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _download_jar() -> Path | None:
+    """Fetch the pinned release jar into the cache; None if it cannot be verified."""
+    jar = CACHE_DIR / f"selenium-boot-migrator-{MIGRATOR_VERSION}.jar"
+    if jar.is_file() and _sha256(jar) == MIGRATOR_SHA256:
+        return jar
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = jar.with_suffix(".part")
+        with urllib.request.urlopen(MIGRATOR_URL, timeout=60) as resp:
+            tmp.write_bytes(resp.read())
+        if _sha256(tmp) != MIGRATOR_SHA256:
+            tmp.unlink(missing_ok=True)
+            return None
+        tmp.replace(jar)
+        return jar
+    except OSError:
+        return None
+
+
 def _command() -> list[str] | None:
+    java = shutil.which("java")
     jar = os.environ.get(JAR_ENV, "").strip()
     if jar:
-        if not Path(jar).is_file():
-            return None
-        java = shutil.which("java")
-        return [java, "-jar", jar] if java else None
+        return [java, "-jar", jar] if java and Path(jar).is_file() else None
     launcher = shutil.which("selenium-boot-migrator")
-    return [launcher] if launcher else None
+    if launcher:
+        return [launcher]
+    if not java:
+        return None
+    cached = _download_jar()
+    return [java, "-jar", str(cached)] if cached else None
 
 
 class MigrateTools:
@@ -57,7 +95,7 @@ class MigrateTools:
         project = Path(args.get("project_dir") or "").expanduser()
         if not args.get("project_dir") or not project.is_dir():
             return f"Error: project_dir not found: {args.get('project_dir')!r}"
-        cmd = _command()
+        cmd = await asyncio.to_thread(_command)
         if cmd is None:
             return f"Error: {NOT_FOUND}"
         proc = await asyncio.create_subprocess_exec(

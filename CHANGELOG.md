@@ -8,7 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - **`migrate` tool** (in the `core` profile): runs selenium-boot-migrator's read-only
   `analyze --format json` and returns the report, so an agent can plan a migration.
-  Needs the migrator jar via `SELENIUM_BOOT_MIGRATOR_JAR` or a launcher on `PATH`.
+  Uses `SELENIUM_BOOT_MIGRATOR_JAR` or a `PATH` launcher if present; otherwise downloads the
+  pinned migrator v0.1.0 jar on first use (SHA-256 verified, cached in `~/.cache/seleniumboot-mcp/`).
 
 ## [0.8.0]
 

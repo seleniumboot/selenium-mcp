@@ -131,8 +131,10 @@ Claude controls the real browser, records every action, and on request generates
 
 The `migrate` tool runs [selenium-boot-migrator](https://github.com/seleniumboot/selenium-boot-migrator)'s
 read-only `analyze` on a project and returns its JSON report (what maps cleanly, what needs a human).
-It needs the migrator jar: build it with `mvn package` and set `SELENIUM_BOOT_MIGRATOR_JAR` to the
-jar path, or put a `selenium-boot-migrator` launcher on `PATH`. It never edits your project.
+It needs Java 17+. On first use it downloads the pinned migrator release (v0.1.0) from GitHub
+into `~/.cache/seleniumboot-mcp/`, verifies its SHA-256, and reuses it afterwards; this is the only
+network call the tool makes. To skip the download, set `SELENIUM_BOOT_MIGRATOR_JAR` to a jar you
+built, or put a `selenium-boot-migrator` launcher on `PATH`. It never edits your project.
 
 ## Tools (77 total; 43 exposed by default)
 
