@@ -3,7 +3,7 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.9.0]
 
 ### Added
 - **`migrate` tool** (in the `core` profile): runs selenium-boot-migrator's read-only
