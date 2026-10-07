@@ -3,6 +3,13 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`migrate` tool** (in the `core` profile): runs selenium-boot-migrator's read-only
+  `analyze --format json` and returns the report, so an agent can plan a migration.
+  Needs the migrator jar via `SELENIUM_BOOT_MIGRATOR_JAR` or a launcher on `PATH`.
+
 ## [0.8.0]
 
 ### Breaking

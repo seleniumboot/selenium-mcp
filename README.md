@@ -127,16 +127,23 @@ Claude controls the real browser, records every action, and on request generates
 
 ---
 
-## Tools (76 total; 42 exposed by default)
+## Migrating an existing Selenium project
+
+The `migrate` tool runs [selenium-boot-migrator](https://github.com/seleniumboot/selenium-boot-migrator)'s
+read-only `analyze` on a project and returns its JSON report (what maps cleanly, what needs a human).
+It needs the migrator jar: build it with `mvn package` and set `SELENIUM_BOOT_MIGRATOR_JAR` to the
+jar path, or put a `selenium-boot-migrator` launcher on `PATH`. It never edits your project.
+
+## Tools (77 total; 43 exposed by default)
 
 ### Reducing token use
 
 Tool definitions are sent to the model every session. Since 0.8.0 the server exposes the
-`core` profile by default: 42 tools, ~3.8k tokens, covering the record-and-generate workflow
-(browser, elements, assertions, and the single `generate` tool for every output target).
+`core` profile by default: 43 tools, ~3.9k tokens, covering the record-and-generate workflow
+(browser, elements, assertions, the single `generate` tool for every output target, and `migrate`).
 Cookies, storage, windows/tabs, network mocking, device emulation, screenshot-diff,
 accessibility, healing, shadow DOM, tables and double/right-click/drag are left out.
-Set `SELENIUM_MCP_TOOLS=all` to expose all 76 (~6.3k tokens).
+Set `SELENIUM_MCP_TOOLS=all` to expose all 77 (~6.4k tokens).
 
 ```json
 { "mcpServers": { "selenium": { "command": "seleniumboot-mcp", "env": { "SELENIUM_MCP_TOOLS": "all" } } } }

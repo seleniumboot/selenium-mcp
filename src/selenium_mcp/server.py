@@ -24,6 +24,7 @@ from selenium_mcp.tools.browser_tools import BrowserTools
 from selenium_mcp.tools.element_tools import ElementTools
 from selenium_mcp.tools.assertion_tools import AssertionTools
 from selenium_mcp.tools.codegen_tools import CodegenTools
+from selenium_mcp.tools.migrate_tools import MigrateTools
 from selenium_mcp.tools._profiles import select_tools
 
 _log_path = Path(tempfile.gettempdir()) / "selenium-mcp.log"
@@ -85,12 +86,14 @@ browser = BrowserTools()
 element = ElementTools(browser)
 assertion = AssertionTools(browser)
 codegen = CodegenTools(browser)
+migrate = MigrateTools()
 
 ALL_TOOLS = [
     *browser.get_tools(),
     *element.get_tools(),
     *assertion.get_tools(),
     *codegen.get_tools(),
+    *migrate.get_tools(),
 ]
 
 TOOL_HANDLERS = {
@@ -98,6 +101,7 @@ TOOL_HANDLERS = {
     **element.get_handlers(),
     **assertion.get_handlers(),
     **codegen.get_handlers(),
+    **migrate.get_handlers(),
 }
 
 # SELENIUM_MCP_TOOLS=core exposes only the record-and-generate subset (default: all).

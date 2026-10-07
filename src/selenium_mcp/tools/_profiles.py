@@ -30,6 +30,8 @@ CORE_TOOLS = frozenset({
     # codegen
     "detect_selenium_boot", "generate",
     "get_session_log", "clear_session_log",
+    # migrate
+    "migrate",
 })
 
 PROFILE_ENV = "SELENIUM_MCP_TOOLS"
