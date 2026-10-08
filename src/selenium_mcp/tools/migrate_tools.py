@@ -109,6 +109,7 @@ class MigrateTools:
             await proc.wait()
             return f"Error: migrator timed out after {TIMEOUT_SECONDS}s"
         # exit 0 = ok, 1 = confidence gate (not used here); 2/3 = usage or runtime error
-        if proc.returncode not in (0, 1):
-            return f"Error: migrator exited {proc.returncode}: {err.decode(errors='replace').strip()}"
+        # An unsupported JVM (Java < 17) also exits 1, with nothing on stdout.
+        if proc.returncode not in (0, 1) or not out.strip():
+            return f"Error: migrator exited {proc.returncode} with no report (Java 17+ required): {err.decode(errors='replace').strip()}"
         return out.decode(errors="replace")
