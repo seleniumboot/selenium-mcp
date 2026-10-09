@@ -3,6 +3,12 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.9.2]
+
+### Changed
+- `migrate` now downloads the pinned migrator v0.1.1 (was v0.1.0), which parses Java 22+
+  syntax such as unnamed variables `(_, b) ->` instead of reporting those files unparsable.
+
 ## [0.9.1]
 
 ### Fixed
