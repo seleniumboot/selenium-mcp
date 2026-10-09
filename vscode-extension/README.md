@@ -1,7 +1,7 @@
 # Selenium Boot MCP — AI Browser Automation
 
 Control a real Chrome/Firefox browser directly from **GitHub Copilot** and **Claude Code** using the Model Context Protocol.
-85 tools for navigation, interaction, assertions, codegen, and more — no ChromeDriver setup needed.
+43 tools by default (77 total) for navigation, interaction, assertions, codegen, and more — no ChromeDriver setup needed.
 
 ---
 
