@@ -3,6 +3,15 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.9.1]
+
+### Fixed
+- `migrate` now returns an error when the migrator exits with no output (e.g. Java < 17)
+  instead of an empty report.
+
+### Docs
+- Tool count corrected to 43 default / 77 total (was "85").
+
 ## [0.9.0]
 
 ### Added
