@@ -104,7 +104,8 @@ TOOL_HANDLERS = {
     **migrate.get_handlers(),
 }
 
-# SELENIUM_MCP_TOOLS=core exposes only the record-and-generate subset (default: all).
+# The default "core" profile exposes the 43 record-and-generate tools; set
+# SELENIUM_MCP_TOOLS=all for the full set.
 ALL_TOOLS, TOOL_HANDLERS = select_tools(ALL_TOOLS, TOOL_HANDLERS)
 
 
