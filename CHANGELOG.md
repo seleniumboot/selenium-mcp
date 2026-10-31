@@ -3,6 +3,12 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.9.3]
+
+### Fixed
+- `migrate` now downloads the pinned migrator v0.1.2 (was v0.1.1). Migrated projects get
+  Selenium Boot 3.9.0 instead of the outdated 3.5.0.
+
 ## [0.9.2]
 
 ### Changed

@@ -12,12 +12,12 @@ JAR_ENV = "SELENIUM_BOOT_MIGRATOR_JAR"
 TIMEOUT_SECONDS = 120
 
 # Pinned release, verified by hash. Bump both together when the migrator releases.
-MIGRATOR_VERSION = "0.1.1"
+MIGRATOR_VERSION = "0.1.2"
 MIGRATOR_URL = (
     "https://github.com/seleniumboot/selenium-boot-migrator/releases/download/"
     f"v{MIGRATOR_VERSION}/selenium-boot-migrator.jar"
 )
-MIGRATOR_SHA256 = "bd7200fd7ee0aa5c46e35112e648891fa1177460fde73b2a9c7a17ebf46ee286"
+MIGRATOR_SHA256 = "0e42d24e791234c3d854fd86b3ef64a0dcde7f026d98b0e4e6487c4bd6f54471"
 CACHE_DIR = Path.home() / ".cache" / "seleniumboot-mcp"
 
 NOT_FOUND = (
