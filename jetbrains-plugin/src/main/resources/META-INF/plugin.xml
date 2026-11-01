@@ -6,8 +6,8 @@
 
     <description><![CDATA[
         <p>MCP server for <b>Selenium WebDriver</b> browser automation.</p>
-        <p>Lets JetBrains AI Assistant control a real browser — 85 tools for navigation, element interactions,
-        assertions, self-healing locators, and test code generation.</p>
+        <p>Lets JetBrains AI Assistant control a real browser — 43 tools by default, 77 total with the all profile,
+        for navigation, element interactions, assertions, self-healing locators, and test code generation.</p>
         <ul>
             <li>Java TestNG / JUnit 5 / Page Object / Cucumber codegen</li>
             <li>Python pytest and C# NUnit codegen</li>
@@ -18,7 +18,7 @@
         <p>Requires: <code>pip install seleniumboot-mcp</code> and Python 3.10+</p>
         <p><a href="https://github.com/seleniumboot/selenium-mcp">GitHub</a> |
            <a href="https://pypi.org/project/seleniumboot-mcp/">PyPI</a> |
-           <a href="https://seleniumboot.github.io/selenium-boot/">Docs</a></p>
+           <a href="https://docs.seleniumboot.com">Docs</a></p>
     ]]></description>
 
     <change-notes><![CDATA[
