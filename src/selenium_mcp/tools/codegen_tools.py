@@ -608,7 +608,10 @@ public class {test_name} {{
         base_url = next((e["url"] for e in log if e.get("action") == "navigate"), "")
         inferred = self._url_to_page_name(base_url)
         page_name = args.get("page_name", f"{inferred}Page")
-        test_name = page_name[:-4] + "Test" if page_name.endswith("Page") else f"{page_name}Test"
+        # test_name names the test class; only when omitted is it derived from the page.
+        test_name = args.get("test_name") or (
+            page_name[:-4] + "Test" if page_name.endswith("Page") else f"{page_name}Test"
+        )
 
         elements = self._build_element_map(log)
 

@@ -3,6 +3,12 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `generate` with `kind=page_object` now uses `test_name` for the test class. It used to
+  ignore it and always name the test after the page (`LoginPage` → `LoginTest`).
+
 ## [0.9.3]
 
 ### Fixed
