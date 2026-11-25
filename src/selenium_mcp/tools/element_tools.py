@@ -575,7 +575,8 @@ class ElementTools:
         el.send_keys(args["text"])
         sel_lower = args["selector"].lower()
         logged_text = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else args["text"]
-        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text, attrs=attrs)
+        rec = {"secret": True} if logged_text == "***" else {}
+        self.browser.record("type_text", selector=args["selector"], by=args.get("by", "css"), text=logged_text, attrs=attrs, **rec)
         return f"✅ Typed into '{args['selector']}'{self._heal_note()}"
 
     async def _get_text(self, args: dict) -> str:
@@ -720,7 +721,8 @@ class ElementTools:
             el.send_keys(value)
             sel_lower = selector.lower()
             logged = "***" if any(k in sel_lower for k in ("password", "passwd", "pwd")) else value
-            self.browser.record("type_text", selector=selector, by=by, text=logged, attrs=attrs)
+            rec = {"secret": True} if logged == "***" else {}
+            self.browser.record("type_text", selector=selector, by=by, text=logged, attrs=attrs, **rec)
             return f"  input   {selector!r} → '{logged}'"
 
     async def _fill_form(self, args: dict) -> str:

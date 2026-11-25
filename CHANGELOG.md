@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Plain `generate` output (Java TestNG/JUnit 5, Python, C#) now replays every recorded
+  `assert_*` check. Only the Selenium Boot flavour did before, so a recorded login test had
+  no assertion and passed even when the login failed.
+- Password fields are no longer emitted as `sendKeys("***")`, which typed the wrong
+  password. Generated code now reads the secret from the `TEST_PASSWORD` environment variable
+  (`System.getenv`, `os.environ`, `Environment.GetEnvironmentVariable`, `process.env`), so it
+  still never lands in your code. The session log keeps `***` and marks the step `secret`.
+- `generate` with `language=java` or `csharp` now accepts `class_name` as the class name
+  (when `test_name` isn't given). It used to be Python-only and was silently ignored.
+- `assert_attribute` now records whether the check was exact, so generated code matches it.
 - `generate` with `kind=page_object` now uses `test_name` for the test class. It used to
   ignore it and always name the test after the page (`LoginPage` → `LoginTest`).
 - `generate` with `language=github_actions` now writes the test step as a normal step. It used
