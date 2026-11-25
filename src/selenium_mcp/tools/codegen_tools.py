@@ -2100,7 +2100,7 @@ namespace {namespace}
         java_ver = args.get("java_version", "17")
 
         if language == "java_maven":
-            run_step = "- name: Run Selenium tests\n          run: mvn test -B"
+            run_step = "name: Run Selenium tests\n        run: mvn test -B"
             setup = f"""      - name: Set up JDK {java_ver}
         uses: actions/setup-java@v4
         with:
@@ -2108,7 +2108,7 @@ namespace {namespace}
           distribution: 'temurin'
           cache: maven"""
         elif language == "java_gradle":
-            run_step = "- name: Run Selenium tests\n          run: ./gradlew test"
+            run_step = "name: Run Selenium tests\n        run: ./gradlew test"
             setup = f"""      - name: Set up JDK {java_ver}
         uses: actions/setup-java@v4
         with:
@@ -2116,7 +2116,7 @@ namespace {namespace}
           distribution: 'temurin'
           cache: gradle"""
         else:  # python_pytest
-            run_step = "- name: Run Selenium tests\n          run: pytest --tb=short -v"
+            run_step = "name: Run Selenium tests\n        run: pytest --tb=short -v"
             setup = """      - name: Set up Python
         uses: actions/setup-python@v5
         with:

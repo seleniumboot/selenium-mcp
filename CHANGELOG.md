@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `generate` with `kind=page_object` now uses `test_name` for the test class. It used to
   ignore it and always name the test after the page (`LoginPage` → `LoginTest`).
+- `generate` with `language=github_actions` now writes the test step as a normal step. It used
+  to emit `- - name: Run Selenium tests` (a nested list), which GitHub Actions rejects.
 
 ## [0.9.3]
 
