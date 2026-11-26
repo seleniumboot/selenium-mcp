@@ -230,6 +230,7 @@ class AssertionTools:
         if ok:
             self.browser.record("assert_attribute", selector=args["selector"], by=args.get("by", "css"),
                                 attribute=args["attribute"], expected=exp,
+                                exact=args.get("exact", True),
                                 attrs=semantic_attrs(self._driver(), el))
         return self._pass(f"{args['attribute']}='{actual}'") if ok else self._fail(f"expected='{exp}' | actual='{actual}'")
 

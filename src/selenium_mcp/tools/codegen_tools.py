@@ -58,7 +58,7 @@ class CodegenTools:
                             "description": "java kind=test with framework=selenium_boot only: BaseTest (testng) or BaseJUnit5Test (junit5)",
                         },
                         "test_name": {"type": "string", "description": "Test function/class name (python, java, csharp, playwright)"},
-                        "class_name": {"type": "string", "description": "python only: test class name"},
+                        "class_name": {"type": "string", "description": "Test class name (python; java/csharp: same as test_name)"},
                         "package_name": {"type": "string", "description": "java/gherkin package (page_object: base package)"},
                         "page_name": {"type": "string", "description": "page_object only: e.g. LoginPage; inferred from URL if omitted"},
                         "feature_name": {"type": "string", "description": "gherkin only: e.g. Login; inferred from URL if omitted"},
@@ -117,6 +117,11 @@ class CodegenTools:
         if language not in GENERATE_LANGUAGES:
             return f"Error: language must be one of {', '.join(GENERATE_LANGUAGES)} (got {language!r})."
         a = {k: v for k, v in args.items() if v is not None}
+        # class_name was documented as python-only, so an AI asking for
+        # class_name="LoginTest" in Java silently got RecordedFlowTest.
+        # For class-based targets, accept it as the class name.
+        if language in ("java", "csharp") and "class_name" in a and "test_name" not in a:
+            a["test_name"] = a["class_name"]
         if language == "java":
             framework = a.get("framework", "testng")
             if framework not in ("testng", "junit5", "selenium_boot"):
@@ -182,8 +187,9 @@ class CodegenTools:
         class_name = args.get("class_name", "TestRecordedFlow")
 
         steps = self._log_to_python_steps(log)
+        os_import = "import os\n" if any(e.get("action") == "type_text" and self._is_secret(e) for e in log) else ""
 
-        code = f'''import pytest
+        code = f'''{os_import}import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -220,7 +226,8 @@ class {class_name}:
             by_const = self._py_by(by)
 
             if (action or "").startswith("assert_"):
-                continue  # assertions are emitted only in the Selenium Boot flavor
+                lines += [indent + l for l in self._py_assert_lines(entry, by_const, sel)]
+                continue
             if action == "start_browser":
                 lines.append(f"{indent}# Browser started — handled in setup_method")
             elif action == "navigate":
@@ -228,10 +235,9 @@ class {class_name}:
             elif action == "click":
                 lines.append(f'{indent}self.wait.until(EC.element_to_be_clickable(({by_const}, "{sel}"))).click()')
             elif action == "type_text":
-                text = entry.get("text", "")
                 lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
                 lines.append(f'{indent}el.clear()')
-                lines.append(f'{indent}el.send_keys("{text}")')
+                lines.append(f'{indent}el.send_keys({self._text_expr(entry, "python")})')
             elif action == "hover":
                 lines.append(f'{indent}el = self.wait.until(EC.visibility_of_element_located(({by_const}, "{sel}")))')
                 lines.append(f'{indent}ActionChains(self.driver).move_to_element(el).perform()')
@@ -334,6 +340,141 @@ class {class_name}:
         }.get(by, "By.CSS_SELECTOR")
 
     # ------------------------------------------------------------------ #
+    #  Typed text + secrets                                                #
+    # ------------------------------------------------------------------ #
+    SECRET_ENV = "TEST_PASSWORD"
+
+    @staticmethod
+    def _is_secret(entry: dict) -> bool:
+        # Password fields are recorded as "***" so the real value never lands in
+        # generated code. Emitting "***" as a literal made the test type the wrong
+        # password, so secrets are read from an environment variable instead.
+        return bool(entry.get("secret")) or entry.get("text") == "***"
+
+    def _text_expr(self, entry: dict, lang: str) -> str:
+        """Code expression for the text a type_text step sends."""
+        if self._is_secret(entry):
+            return {
+                "java":   f'System.getenv("{self.SECRET_ENV}")',
+                "python": f'os.environ["{self.SECRET_ENV}"]',
+                "csharp": f'Environment.GetEnvironmentVariable("{self.SECRET_ENV}")',
+                "ts":     f'process.env.{self.SECRET_ENV}!',
+            }[lang]
+        text = (entry.get("text") or "").replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{text}"'
+
+    @staticmethod
+    def _q(s) -> str:
+        return str(s or "").replace("\\", "\\\\").replace('"', '\\"')
+
+    # ------------------------------------------------------------------ #
+    #  Recorded assert_* → plain-Selenium assertions                       #
+    # ------------------------------------------------------------------ #
+    # Every assert_* the AI ran (and passed) is replayed in the generated test.
+    # Without it a recorded flow has no assertion, so it passes even when the
+    # behaviour it was recorded to check is broken.
+
+    def _java_assert_lines(self, entry: dict, by_java: str, api: str, n: int) -> list:
+        a, q = entry.get("action", ""), self._q
+        var = "actual" if n == 1 else f"actual{n}"
+
+        def eq(actual, expected_literal):
+            if api == "junit5":
+                return f"assertEquals({expected_literal}, {actual});"
+            return f"Assert.assertEquals({actual}, {expected_literal});"
+
+        def tru(cond, msg):
+            fn = "assertTrue" if api == "junit5" else "Assert.assertTrue"
+            return f'{fn}({cond}, "{q(msg)}");'
+
+        visible = f"wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}))"
+        present = f"wait.until(ExpectedConditions.presenceOfElementLocated({by_java}))"
+        if a in ("assert_title", "assert_url"):
+            getter = "driver.getTitle()" if a == "assert_title" else "driver.getCurrentUrl()"
+            exp = q(entry.get("expected", ""))
+            if entry.get("exact"):
+                return [eq(getter, f'"{exp}"')]
+            what = "title" if a == "assert_title" else "URL"
+            return [tru(f'{getter}.contains("{exp}")', f"{what} should contain: {exp}")]
+        if a == "assert_text":
+            exp = q(entry.get("expected", ""))
+            lines = [f"String {var} = {visible}.getText();"]
+            if entry.get("exact"):
+                return lines + [eq(var, f'"{exp}"')]
+            return lines + [tru(f'{var}.contains("{exp}")', f"text should contain: {exp}")]
+        if a == "assert_visible":
+            return [tru(f"{visible}.isDisplayed()", f"should be visible: {entry.get('selector', '')}")]
+        if a == "assert_hidden":
+            return [tru(f"wait.until(ExpectedConditions.invisibilityOfElementLocated({by_java}))",
+                        f"should be hidden: {entry.get('selector', '')}")]
+        if a == "assert_attribute":
+            attr, exp = q(entry.get("attribute", "")), q(entry.get("expected", ""))
+            lines = [f'String {var} = {present}.getAttribute("{attr}");']
+            if entry.get("exact", True):
+                return lines + [eq(var, f'"{exp}"')]
+            return lines + [tru(f'{var} != null && {var}.contains("{exp}")', f"{attr} should contain: {exp}")]
+        if a == "assert_page_contains":
+            txt = q(entry.get("text", ""))
+            return [tru(f'driver.getPageSource().contains("{txt}")', f"page should contain: {txt}")]
+        if a == "assert_count":
+            n_exp = int(entry.get("expected_count", 0) or 0)
+            return [eq(f"driver.findElements({by_java}).size()", str(n_exp))]
+        return []
+
+    def _py_assert_lines(self, entry: dict, by_const: str, sel: str) -> list:
+        a = entry.get("action", "")
+        r = lambda s: repr(str(s or ""))
+        loc = f'({by_const}, {r(sel)})'
+        if a in ("assert_title", "assert_url"):
+            getter = "self.driver.title" if a == "assert_title" else "self.driver.current_url"
+            exp = r(entry.get("expected"))
+            return [f"assert {getter} == {exp}" if entry.get("exact") else f"assert {exp} in {getter}"]
+        if a == "assert_text":
+            exp = r(entry.get("expected"))
+            get = f"self.wait.until(EC.visibility_of_element_located({loc})).text"
+            return [f"assert {get} == {exp}" if entry.get("exact") else f"assert {exp} in {get}"]
+        if a == "assert_visible":
+            return [f"assert self.wait.until(EC.visibility_of_element_located({loc})).is_displayed()"]
+        if a == "assert_hidden":
+            return [f"assert self.wait.until(EC.invisibility_of_element_located({loc}))"]
+        if a == "assert_attribute":
+            exp = r(entry.get("expected"))
+            get = f"self.wait.until(EC.presence_of_element_located({loc})).get_attribute({r(entry.get('attribute'))})"
+            return [f"assert {get} == {exp}" if entry.get("exact", True) else f"assert {exp} in ({get} or '')"]
+        if a == "assert_page_contains":
+            return [f"assert {r(entry.get('text'))} in self.driver.page_source"]
+        if a == "assert_count":
+            return [f"assert len(self.driver.find_elements(*{loc})) == {int(entry.get('expected_count', 0) or 0)}"]
+        return []
+
+    def _cs_assert_lines(self, entry: dict, by_cs: str) -> list:
+        a, q = entry.get("action", ""), self._q
+        if a in ("assert_title", "assert_url"):
+            getter = "driver.Title" if a == "assert_title" else "driver.Url"
+            exp = q(entry.get("expected", ""))
+            if entry.get("exact"):
+                return [f'Assert.That({getter}, Is.EqualTo("{exp}"));']
+            return [f'Assert.That({getter}, Does.Contain("{exp}"));']
+        visible = f"wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))"
+        if a == "assert_text":
+            exp = q(entry.get("expected", ""))
+            cond = f'Is.EqualTo("{exp}")' if entry.get("exact") else f'Does.Contain("{exp}")'
+            return [f"Assert.That({visible}.Text, {cond});"]
+        if a == "assert_visible":
+            return [f"Assert.That({visible}.Displayed, Is.True);"]
+        if a == "assert_hidden":
+            return [f"Assert.That(wait.Until(ExpectedConditions.InvisibilityOfElementLocated({by_cs})), Is.True);"]
+        if a == "assert_attribute":
+            attr, exp = q(entry.get("attribute", "")), q(entry.get("expected", ""))
+            cond = f'Is.EqualTo("{exp}")' if entry.get("exact", True) else f'Does.Contain("{exp}")'
+            return [f'Assert.That(driver.FindElement({by_cs}).GetAttribute("{attr}"), {cond});']
+        if a == "assert_page_contains":
+            return [f'Assert.That(driver.PageSource, Does.Contain("{q(entry.get("text", ""))}"));']
+        if a == "assert_count":
+            return [f"Assert.That(driver.FindElements({by_cs}).Count, Is.EqualTo({int(entry.get('expected_count', 0) or 0)}));"]
+        return []
+
+    # ------------------------------------------------------------------ #
     #  Java TestNG codegen                                                 #
     # ------------------------------------------------------------------ #
     async def _generate_java_testng(self, args: dict) -> str:
@@ -416,7 +557,7 @@ public class {test_name} {{
                 test_annotation_import="import org.junit.jupiter.api.Test;",
                 static_ctx=True, assert_api="junit5")
 
-        steps = self._log_to_java_steps(log)
+        steps = self._log_to_java_steps(log, assert_api="junit5")
 
         code = f'''package {package};
 
@@ -465,9 +606,10 @@ public class {test_name} {{
 '''
         return recommendation_banner(args.get("framework")) + not_detected_note(args.get("framework")) + code
 
-    def _log_to_java_steps(self, log: list) -> str:
+    def _log_to_java_steps(self, log: list, assert_api: str = "testng") -> str:
         lines = []
         indent = "        "
+        n_actual = 0
         # Unique local-variable names so repeated type/select actions don't
         # redeclare `field` / `dropdown` (which fails to compile in Java).
         n_field = 0
@@ -479,7 +621,9 @@ public class {test_name} {{
             by_java = self._java_by(by, sel)
 
             if (action or "").startswith("assert_"):
-                continue  # assertions are emitted only in the Selenium Boot flavor
+                n_actual += 1
+                lines += [indent + l for l in self._java_assert_lines(entry, by_java, assert_api, n_actual)]
+                continue
             if action == "start_browser":
                 lines.append(f"{indent}// Browser started — handled in setUp()")
             elif action == "navigate":
@@ -487,12 +631,11 @@ public class {test_name} {{
             elif action == "click":
                 lines.append(f'{indent}wait.until(ExpectedConditions.elementToBeClickable({by_java})).click();')
             elif action == "type_text":
-                text = entry.get("text", "")
                 n_field += 1
                 field = "field" if n_field == 1 else f"field{n_field}"
                 lines.append(f'{indent}WebElement {field} = wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}));')
                 lines.append(f'{indent}{field}.clear();')
-                lines.append(f'{indent}{field}.sendKeys("{text}");')
+                lines.append(f'{indent}{field}.sendKeys({self._text_expr(entry, "java")});')
             elif action == "hover":
                 lines.append(f'{indent}new Actions(driver).moveToElement(wait.until(ExpectedConditions.visibilityOfElementLocated({by_java}))).perform();')
             elif action == "double_click":
@@ -916,7 +1059,7 @@ public class {test_name} {{
             elif name:
                 cap = name[0].upper() + name[1:]
                 if action == "type_text":
-                    lines.append(f'{i}{i}page.enter{cap}("{entry.get("text", "")}");')
+                    lines.append(f'{i}{i}page.enter{cap}({self._text_expr(entry, "java")});')
                 elif action == "click":
                     lines.append(f"{i}{i}page.click{cap}();")
                 elif action == "hover":
@@ -1399,7 +1542,7 @@ public class {test_name} {{
 
             loc = self._sb_locator_from_attrs(entry.get("attrs"), by, sel, static_ctx)
             if action == "type_text":
-                out.append(f'{loc}.type("{q(entry.get("text", ""))}");')
+                out.append(f'{loc}.type({self._text_expr(entry, "java")});')
             elif action == "click":
                 out.append(f"{loc}.click();")
             elif action == "hover":
@@ -1512,7 +1655,7 @@ public class {test_name} {{
             elif name:
                 cap = name[0].upper() + name[1:]
                 if action == "type_text":
-                    body_lines.append(f'{i}{i}page.enter{cap}("{entry.get("text", "")}");')
+                    body_lines.append(f'{i}{i}page.enter{cap}({self._text_expr(entry, "java")});')
                 elif action == "click":
                     body_lines.append(f"{i}{i}page.click{cap}();")
                 elif action == "hover":
@@ -2003,7 +2146,8 @@ namespace {namespace}
             by_cs = self._csharp_by(by, sel)
 
             if (action or "").startswith("assert_"):
-                continue  # assertions are emitted only in the Selenium Boot flavor
+                lines += [indent + l for l in self._cs_assert_lines(entry, by_cs)]
+                continue
             if action == "start_browser":
                 lines.append(f"{indent}// Browser started — handled in SetUp()")
             elif action == "navigate":
@@ -2011,12 +2155,11 @@ namespace {namespace}
             elif action == "click":
                 lines.append(f'{indent}wait.Until(ExpectedConditions.ElementToBeClickable({by_cs})).Click();')
             elif action == "type_text":
-                text = entry.get("text", "")
                 n_field += 1
                 field = "field" if n_field == 1 else f"field{n_field}"
                 lines.append(f'{indent}var {field} = wait.Until(ExpectedConditions.ElementIsVisible({by_cs}));')
                 lines.append(f'{indent}{field}.Clear();')
-                lines.append(f'{indent}{field}.SendKeys("{text}");')
+                lines.append(f'{indent}{field}.SendKeys({self._text_expr(entry, "csharp")});')
             elif action == "hover":
                 lines.append(f'{indent}new Actions(driver).MoveToElement(wait.Until(ExpectedConditions.ElementIsVisible({by_cs}))).Perform();')
             elif action == "double_click":
@@ -2301,7 +2444,7 @@ test("{test_name}", async ({{ page }}) => {{
             elif action == "click":
                 lines.append(f'{indent}await page.locator("{sel}").click();')
             elif action == "type_text":
-                lines.append(f'{indent}await page.locator("{sel}").fill("{entry.get("text", "")}");')
+                lines.append(f'{indent}await page.locator("{sel}").fill({self._text_expr(entry, "ts")});')
             elif action == "get_text":
                 lines.append(f'{indent}const text = await page.locator("{sel}").textContent();')
             elif action == "hover":
