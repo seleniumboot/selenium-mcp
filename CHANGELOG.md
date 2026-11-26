@@ -3,7 +3,7 @@
 All notable changes to **seleniumboot-mcp** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.9.4]
 
 ### Fixed
 - Plain `generate` output (Java TestNG/JUnit 5, Python, C#) now replays every recorded
